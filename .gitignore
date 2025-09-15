@@ -75,3 +75,4 @@ local.properties
 # Firebase configs (if used)
 **/android/app/google-services.json
 **/ios/Runner/GoogleService-Info.plist
+
