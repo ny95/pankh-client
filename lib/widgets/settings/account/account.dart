@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:projectwebview/widgets/settings/accountList.dart';
+import 'package:projectwebview/providers/auth_provider.dart';
+import 'package:projectwebview/widgets/settings/account_list.dart';
+import 'package:provider/provider.dart';
+import '../../../utils/email_servers.dart';
 
 class AccountSettingsTab extends StatelessWidget {
   final bool isSmallScreen;
@@ -24,9 +27,9 @@ class ServerSettingsDialog extends StatefulWidget {
 class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     with SingleTickerProviderStateMixin {
   String currentSetting = 'server_setting';
-  String serverType = 'POP Mail Server';
-  String serverName = 'mail.neosoftmail.com';
-  String userName = 'naveen.y@neosoftmail.com';
+  String serverType = 'IMAP Mail Server';
+  String serverName = '';
+  String userName = '';
   String connectionSecurity = 'STARTTLS';
   String authMethod = 'Normal password';
   bool checkAtStartup = true;
@@ -38,34 +41,27 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
   bool untilDeleted = true;
   bool emptyTrashOnExit = false;
   String messageStoreType = 'File per folder (mbox)';
+  final _addAccountFormKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  final TextEditingController _serverNameController = TextEditingController();
-  final TextEditingController _userNameController = TextEditingController();
-  late AnimationController _animationController;
-  late Animation<double> _iconTurns;
   @override
   void initState() {
     super.initState();
-    _serverNameController.text = 'mail.neosoftmail.com';
-    _userNameController.text = 'naveen.y@neosoftmail.com';
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _iconTurns = Tween<double>(
-      begin: 0.0,
-      end: 0.25,
-    ).animate(_animationController);
   }
 
   @override
   void dispose() {
-    _serverNameController.dispose();
-    _userNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Widget _serverSetting() {
+  Widget _serverSetting(String email) {
+    final serverInfo = serverInfoFromEmail(email);
+    serverName = serverInfo.imapHost;
+    userName = email;
+    connectionSecurity = serverInfo.imapSecure ? 'SSL/TLS' : 'None';
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,16 +73,8 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
         ),
         const SizedBox(height: 8),
         _buildReadOnlyField('Server Type:', serverType),
-        _buildTextField(
-          'Server Name:',
-          serverName,
-          (value) => setState(() => serverName = value),
-        ),
-        _buildTextField(
-          'User Name:',
-          userName,
-          (value) => setState(() => userName = value),
-        ),
+        _buildReadOnlyField('Server Name:', serverName),
+        _buildReadOnlyField('User Name:', userName),
         const SizedBox(height: 16),
 
         // Security Settings Section
@@ -95,12 +83,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        _buildDropdownField(
-          'Connection security:',
-          connectionSecurity,
-          ['STARTTLS', 'SSL/TLS', 'None'],
-          (value) => setState(() => connectionSecurity = value!),
-        ),
+        _buildReadOnlyField('Connection security:', connectionSecurity),
         _buildDropdownField(
           'Authentication method:',
           authMethod,
@@ -181,10 +164,10 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     );
   }
 
-  Widget _settingByName({required String type}) {
+  Widget _settingByName({required String type, required String email}) {
     switch (type) {
       case "server_setting":
-        return _serverSetting();
+        return _serverSetting(email);
       case "copies_folder":
         return Text(type);
       case "composition_addressing":
@@ -194,7 +177,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
       case "disk_space":
         return Text(type);
       default:
-        return _serverSetting();
+        return _serverSetting(email);
     }
   }
 
@@ -213,17 +196,107 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           decoration: BoxDecoration(
             border: Border(right: BorderSide(color: Colors.black38, width: 1)),
           ),
-          child: AccountList(onPressed: _toggleSetting),
+          child: Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              final accounts = auth.accounts.map((a) => a.email).toList();
+              return AccountList(
+                onPressed: _toggleSetting,
+                accounts: accounts,
+                activeEmail: auth.activeEmail,
+                onSelectAccount: (email) {
+                  auth.setActive(email);
+                },
+                onRemoveAccount: (email) {
+                  auth.removeAccount(email);
+                },
+              );
+            },
+          ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(30),
-              child: _settingByName(type: currentSetting),
-            ),
+          child: Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              final email = auth.email ?? '';
+              return SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(30),
+                  child: _settingByName(type: currentSetting, email: email),
+                ),
+              );
+            },
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showAddAccountDialog(BuildContext context) async {
+    _emailController.clear();
+    _passwordController.clear();
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Account'),
+          content: Form(
+            key: _addAccountFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Email is required';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password / App Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!_addAccountFormKey.currentState!.validate()) return;
+                await context.read<AuthProvider>().login(
+                      email: _emailController.text,
+                      password: _passwordController.text,
+                    );
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -234,10 +307,33 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           appBar: AppBar(
             title: const Text('Account Settings'),
             centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.person_add_alt_1),
+                onPressed: () => _showAddAccountDialog(context),
+              ),
+            ],
           ),
           body: _accountWidget(),
         )
-        : _accountWidget();
+        : Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _showAddAccountDialog(context),
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: const Text('Add Account'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _accountWidget()),
+          ],
+        );
   }
 
   Widget _buildReadOnlyField(String label, String value) {
@@ -248,37 +344,6 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           SizedBox(width: 120, child: Text(label)),
           const SizedBox(width: 8),
           Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    String label,
-    String initialValue,
-    ValueChanged<String> onChanged,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          SizedBox(width: 120, child: Text(label)),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 300,
-            child: TextFormField(
-              initialValue: initialValue,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
-                isDense: true,
-              ),
-              onChanged: onChanged,
-            ),
-          ),
         ],
       ),
     );

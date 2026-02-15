@@ -1,25 +1,34 @@
+import 'package:flutter/foundation.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 
-class Smtp {
-  Smtp({required this.username, required this.to, required this.option});
+import '../config/email_config.dart';
 
-  final String username; // Make username final
-  late dynamic to; // Make to final
-  final Map<String, dynamic> option; // Use a map for options
-  List<String> toList = [];
-  List<String> ccList = [];
-  List<String> bccList = [];
+class SmtpService {
+  SmtpService({
+    required this.username,
+    required this.to,
+    required this.option,
+    this.password,
+  });
+
+  final String username;
+  final String to;
+  final Map<String, dynamic> option;
+  final String? password;
 
   Future<String> sendMail() async {
-    String password =
-        username == 'naveen.y@neosoftmail.com'
-            ? 'gMMnqy.J![y2'
-            : 'snyklakeunwijhyu';
-    final smtpServer = getSmtpServer(username, password);
-    List<String> toList = to == '' ? [] : to.split(',');
-    List<String> ccList = option['cc'] == '' ? [] : option['cc']?.split(',');
-    List<String> bccList = option['bcc'] == '' ? [] : option['bcc']?.split(',');
+    final resolvedPassword = password ?? EmailConfig.smtpPassword;
+    if (resolvedPassword.isEmpty) {
+      debugPrint('SMTP password missing. Set SMTP_PASSWORD.');
+      return 'SMTP credentials missing.';
+    }
+    final smtpServer = getSmtpServer(username, resolvedPassword);
+    final List<String> toList = to.isEmpty ? [] : to.split(',');
+    final List<String> ccList =
+        option['cc'] == '' ? [] : option['cc']?.split(',') ?? [];
+    final List<String> bccList =
+        option['bcc'] == '' ? [] : option['bcc']?.split(',') ?? [];
 
     final message =
         Message()
@@ -39,17 +48,17 @@ class Smtp {
 
     try {
       final sendReport = await send(message, smtpServer);
-      print('Message sent: $sendReport');
-      return ("Message sent successfully!");
+      debugPrint('Message sent: $sendReport');
+      return 'Message sent successfully!';
     } on MailerException catch (e) {
-      print('Message not sent.');
-      for (var p in e.problems) {
-        print('Problem: ${p.code}: ${p.msg}');
+      debugPrint('Message not sent.');
+      for (final p in e.problems) {
+        debugPrint('Problem: ${p.code}: ${p.msg}');
       }
-      return ("Failed to send the message!");
+      return 'Failed to send the message!';
     } catch (e) {
-      print('An error occurred: $e');
-      return ("Error while sending the message!");
+      debugPrint('An error occurred: $e');
+      return 'Error while sending the message!';
     }
   }
 

@@ -32,8 +32,9 @@ Future<ui.Image> _loadImage(String imagePath) async {
 /// Calculates the brightness of an image.
 double _calculateBrightness(ui.Image image) {
   final dynamic byteData = image.toByteData();
-  if (byteData == null)
+  if (byteData == null) {
     return 0.5; // Default to medium brightness if unable to calculate.
+  }
 
   final pixels = byteData.buffer.asUint8List();
   dynamic r = 0, g = 0, b = 0;

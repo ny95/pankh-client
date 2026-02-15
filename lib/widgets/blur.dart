@@ -17,11 +17,10 @@ class Blur extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return blur
-        ? BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-          child: child,
-        )
-        : child;
+    if (!blur) return child;
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
+      child: child,
+    );
   }
 }

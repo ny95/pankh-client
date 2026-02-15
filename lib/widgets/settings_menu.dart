@@ -1,14 +1,12 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:projectwebview/widgets/child_with_delay.dart';
 import 'package:projectwebview/widgets/settings/account/account.dart';
 import 'package:projectwebview/widgets/settings/composition.dart';
 import 'package:projectwebview/widgets/settings/extension.dart';
 import 'package:projectwebview/widgets/settings/notification.dart';
 import 'package:projectwebview/widgets/settings/security.dart';
 import 'package:provider/provider.dart';
-import '../haveStorage.dart';
-import '../image-shade.dart';
+import '../utils/image_shade.dart';
 import '../providers/theme_provider.dart';
 import '../providers/layout_provider.dart';
 import '../providers/inbox_type_provider.dart';
@@ -21,16 +19,14 @@ class SettingsMenu extends StatefulWidget {
   const SettingsMenu({super.key, required this.onClose, required this.hidden});
 
   @override
-  _SettingsMenuState createState() => _SettingsMenuState();
+  SettingsMenuState createState() => SettingsMenuState();
 }
 
-class _SettingsMenuState extends State<SettingsMenu> {
+class SettingsMenuState extends State<SettingsMenu> {
   late String selectedReadingPane;
   late String selectedInboxType;
   late String currentBackground;
   bool settingCard = true;
-  XFile? _pickedImage;
-
   final List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
@@ -130,6 +126,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
       );
 
       if (file != null) {
+        if (!context.mounted) return;
         // Update theme provider
         final themeProvider = Provider.of<ThemeProvider>(
           context,
@@ -204,7 +201,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             decoration: BoxDecoration(
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   spreadRadius: 1,
                                   blurRadius: 5,
                                   offset: const Offset(1, 1),
@@ -258,7 +255,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
       width: MediaQuery.of(context).size.width * 0.7,
       height: MediaQuery.of(context).size.height * 0.8,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withOpacity(themeProvider.bgOpacity),
+        color: Theme.of(context).cardColor.withValues(
+          alpha: themeProvider.bgOpacity,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Blur(
@@ -303,7 +302,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   Object _showAllSettingsDialog(BuildContext context, themeProvider) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
-    print(isSmallScreen);
     if (isSmallScreen) {
       return Scaffold(
         appBar: AppBar(
@@ -482,11 +480,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
       width: 300,
       margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withOpacity(themeProvider.bgOpacity),
+        color: Theme.of(context).cardColor.withValues(
+          alpha: themeProvider.bgOpacity,
+        ),
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             spreadRadius: 1,
             blurRadius: 5,
             offset: const Offset(1, 1),

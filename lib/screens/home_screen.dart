@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projectwebview/providers/common_provider.dart';
 import 'package:projectwebview/providers/layout_provider.dart';
+import 'package:projectwebview/providers/mail_provider.dart';
 import 'package:projectwebview/widgets/blur.dart';
 import 'package:projectwebview/widgets/header.dart';
 import 'package:projectwebview/widgets/mail_container.dart';
@@ -15,12 +16,13 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  HomeScreenState createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   bool menu = false;
   bool setting = false;
+  int _lastNotifiedCount = 0;
   final List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
@@ -32,13 +34,41 @@ class _HomeScreenState extends State<HomeScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final layoutProvider = Provider.of<LayoutProvider>(context);
     final commonProvider = Provider.of<CommonProvider>(context);
-    bool panePreviewRight = layoutProvider.layout == "pane_preview_right";
+    final mailProvider = Provider.of<MailProvider>(context);
     bool panePreviewOff = layoutProvider.layout == "pane_preview_off";
     var size = MediaQuery.of(context).size;
     bool isSmallScreen = size.width < 800;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      commonProvider.setIsSmallScreen(isSmallScreen: isSmallScreen);
-    });
+    if (commonProvider.isSmallScreen != isSmallScreen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        commonProvider.setIsSmallScreen(isSmallScreen: isSmallScreen);
+        if (isSmallScreen && commonProvider.isMailView) {
+          commonProvider.setIsMailView(isMailView: false);
+        }
+      });
+    }
+    if (mailProvider.newMailCount > 0 &&
+        mailProvider.newMailCount != _lastNotifiedCount &&
+        mounted) {
+      _lastNotifiedCount = mailProvider.newMailCount;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You have ${mailProvider.newMailCount} new email(s).',
+            ),
+            action: SnackBarAction(
+              label: 'Refresh',
+              onPressed: () {
+                mailProvider.refreshNewer();
+                mailProvider.clearNewMailCount();
+              },
+            ),
+          ),
+        );
+      });
+    }
+
     return Scaffold(
       drawer:
           isSmallScreen
@@ -88,7 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(15),
                           color: Theme.of(
                             context,
-                          ).cardColor.withOpacity(themeProvider.bgOpacity),
+                          ).cardColor.withValues(
+                            alpha: themeProvider.bgOpacity,
+                          ),
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: Blur(

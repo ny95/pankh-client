@@ -22,12 +22,10 @@ class InAppWebViewExample extends StatefulWidget {
   const InAppWebViewExample({super.key});
 
   @override
-  _InAppWebViewExampleState createState() => _InAppWebViewExampleState();
+  InAppWebViewExampleState createState() => InAppWebViewExampleState();
 }
 
-class _InAppWebViewExampleState extends State<InAppWebViewExample> {
-  InAppWebViewController? _webViewController; // Make it nullable
-
+class InAppWebViewExampleState extends State<InAppWebViewExample> {
   final String htmlContent = """
   """;
 
@@ -39,9 +37,7 @@ class _InAppWebViewExampleState extends State<InAppWebViewExample> {
           Expanded(
             child: InAppWebView(
               initialData: InAppWebViewInitialData(data: htmlContent),
-              onWebViewCreated: (controller) {
-                _webViewController = controller; // Initialize the controller
-              },
+              onWebViewCreated: (controller) {},
             ),
           ),
         ],

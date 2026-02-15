@@ -2,30 +2,48 @@ import 'package:flutter/material.dart';
 
 class AccountList extends StatefulWidget {
   final ValueChanged<String> onPressed;
+  final List<String> accounts;
+  final String? activeEmail;
+  final ValueChanged<String> onSelectAccount;
+  final ValueChanged<String> onRemoveAccount;
 
-  const AccountList({super.key, required this.onPressed});
+  const AccountList({
+    super.key,
+    required this.onPressed,
+    required this.accounts,
+    required this.activeEmail,
+    required this.onSelectAccount,
+    required this.onRemoveAccount,
+  });
 
   @override
-  _AccountListState createState() => _AccountListState();
+  AccountListState createState() => AccountListState();
 }
 
-class _AccountListState extends State<AccountList>
+class AccountListState extends State<AccountList>
     with TickerProviderStateMixin {
   int? _currentExpandedIndex;
   late List<AnimationController> _animationControllers;
   late List<Animation<double>> _iconTurns;
 
-  final List<String> _accountEmails = const [
-    'naveenyadav0820@gmail.com',
-    'immavenandthisismyemail001@gmail.com',
-    'naveenyadav0820@gmail.com',
-    'naveenyadav0820@gmail.com',
-  ];
+  List<String> get _accountEmails => widget.accounts;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.accounts.length != widget.accounts.length) {
+      for (final controller in _animationControllers) {
+        controller.dispose();
+      }
+      _currentExpandedIndex = null;
+      _initializeAnimations();
+    }
   }
 
   void _initializeAnimations() {
@@ -55,6 +73,9 @@ class _AccountListState extends State<AccountList>
 
   @override
   Widget build(BuildContext context) {
+    if (_accountEmails.isEmpty) {
+      return const Center(child: Text('No account found'));
+    }
     return ListView(
       children: List.generate(
         _accountEmails.length,
@@ -65,6 +86,7 @@ class _AccountListState extends State<AccountList>
 
   Widget _buildEmailTile(String email, int index) {
     final isExpanded = _currentExpandedIndex == index;
+    final isActive = widget.activeEmail == email;
     final theme = Theme.of(context);
 
     return Container(
@@ -81,22 +103,35 @@ class _AccountListState extends State<AccountList>
               turns: _iconTurns[index],
               child: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.more_vert_rounded, size: 14),
-              onPressed: () => _showOptionsMenu(context, email),
-            ),
+            trailing:
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isActive)
+                      const Icon(Icons.check_circle, size: 16),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert_rounded, size: 14),
+                      onPressed: () => _showOptionsMenu(context, email),
+                    ),
+                  ],
+                ),
             title: Text(
               email,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 color:
-                    isExpanded
+                    isActive
                         ? theme.primaryColor
-                        : theme.textTheme.bodySmall?.color,
+                        : (isExpanded
+                            ? theme.primaryColor
+                            : theme.textTheme.bodySmall?.color),
               ),
             ),
-            onTap: () => _handleTileTap(index),
+            onTap: () {
+              widget.onSelectAccount(email);
+              _handleTileTap(index);
+            },
           ),
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
@@ -171,6 +206,17 @@ class _AccountListState extends State<AccountList>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: const Icon(Icons.check_circle_outline, size: 20),
+                title: const Text(
+                  'Set Active',
+                  style: TextStyle(fontSize: 14),
+                ),
+                onTap: () {
+                  widget.onSelectAccount(email);
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.edit, size: 20),
                 title: const Text(
                   'Edit Account',
@@ -184,7 +230,10 @@ class _AccountListState extends State<AccountList>
                   'Remove Account',
                   style: TextStyle(fontSize: 14),
                 ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  widget.onRemoveAccount(email);
+                  Navigator.pop(context);
+                },
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:projectwebview/providers/auth_provider.dart';
 import 'package:projectwebview/providers/common_provider.dart';
 import 'package:projectwebview/providers/inbox_type_provider.dart';
 import 'package:projectwebview/providers/layout_provider.dart';
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/hive_storage.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +20,11 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LayoutProvider()),
         ChangeNotifierProvider(create: (_) => InboxTypeProvider()),
-        ChangeNotifierProvider(create: (_) => MailProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, MailProvider>(
+          create: (_) => MailProvider(),
+          update: (_, auth, mail) => mail!..updateAuth(auth),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -54,7 +60,11 @@ class MyApp extends StatelessWidget {
               : themeProvider.theme == 'dark'
               ? ThemeMode.dark
               : ThemeMode.system,
-      home: const HomeScreen(),
+      home: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
+        },
+      ),
     );
   }
 }

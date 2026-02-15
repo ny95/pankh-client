@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../sendMail.dart';
+import 'package:provider/provider.dart';
+import '../services/smtp_service.dart';
+import '../providers/auth_provider.dart';
 
 class ComposeEmail extends StatefulWidget {
   const ComposeEmail({super.key});
@@ -13,7 +15,6 @@ class _ComposeEmail extends State<ComposeEmail> {
   late bool isSmallScreen = false;
   late double width;
   late double height;
-  final List<String> items = ['naveen.y@neosoftmail.com', '08ny95@gmail.com'];
   String? username;
   late String to = '';
   final Map<String, dynamic> option = {
@@ -30,7 +31,8 @@ class _ComposeEmail extends State<ComposeEmail> {
     height = size.height;
     width = size.width;
     isSmallScreen = width < 800;
-    username = username ?? items[1];
+    final authProvider = Provider.of<AuthProvider>(context);
+    username = authProvider.email;
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -120,8 +122,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                                   ],
                                 ).then((value) {
                                   if (value != null) {
-                                    // Handle the selected option
-                                    print('Selected: $value');
+                                    debugPrint('Selected: $value');
                                   }
                                 });
                               },
@@ -132,10 +133,20 @@ class _ComposeEmail extends State<ComposeEmail> {
                               onPressed: () async {
                                 if (to == '' &&
                                     option['cc'] == '' &&
-                                    option['cc'] == '') {
+                                    option['bcc'] == '') {
                                   setState(() {
                                     alertMessage['content'] =
                                         'Add at least one recipient.';
+                                  });
+                                  return;
+                                }
+                                if (username == null ||
+                                    username!.isEmpty ||
+                                    authProvider.password == null ||
+                                    authProvider.password!.isEmpty) {
+                                  setState(() {
+                                    alertMessage['content'] =
+                                        'Login required to send email.';
                                   });
                                   return;
                                 }
@@ -143,11 +154,12 @@ class _ComposeEmail extends State<ComposeEmail> {
                                   option['username'] = username;
                                   _isLoading = true;
                                 });
-                                var status =
-                                    await Smtp(
-                                      username: username ?? '',
+                                final status =
+                                    await SmtpService(
+                                      username: username!,
                                       to: to,
                                       option: option,
+                                      password: authProvider.password,
                                     ).sendMail();
                                 setState(() {
                                   alertMessage['title'] = status;
@@ -221,8 +233,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                                   ],
                                 ).then((value) {
                                   if (value != null) {
-                                    // Handle the selected option
-                                    print('Selected: $value');
+                                    debugPrint('Selected: $value');
                                   }
                                 });
                               },
@@ -247,35 +258,10 @@ class _ComposeEmail extends State<ComposeEmail> {
                         const Text('From'),
                         const SizedBox(width: 20),
                         Expanded(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: DropdownButton<String>(
-                              // hint: const Text('Select an option'),
-                              value: username,
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              icon: const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                              ),
-                              dropdownColor: const Color(0xFF232923),
-                              focusColor: Colors.transparent,
-                              style: const TextStyle(color: Colors.white70),
-                              onChanged: (String? newValue) {
-                                setState(() {
-                                  username = newValue!;
-                                  option['username'] = newValue;
-                                });
-                              },
-                              items:
-                                  items.map<DropdownMenuItem<String>>((
-                                    String value,
-                                  ) {
-                                    return DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(value),
-                                    );
-                                  }).toList(),
-                            ),
+                          child: Text(
+                            username ?? 'Not logged in',
+                            style: const TextStyle(color: Colors.white70),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

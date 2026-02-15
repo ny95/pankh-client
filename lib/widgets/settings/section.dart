@@ -4,7 +4,7 @@ class SettingsSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const SettingsSection({required this.title, required this.children});
+  const SettingsSection({super.key, required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +37,7 @@ class SettingsRow extends StatelessWidget {
   final String title;
   final Widget trailing;
 
-  const SettingsRow({required this.title, required this.trailing});
+  const SettingsRow({super.key, required this.title, required this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +58,7 @@ class SwitchSettingsRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const SwitchSettingsRow({
+  const SwitchSettingsRow({super.key, 
     required this.title,
     required this.value,
     required this.onChanged,

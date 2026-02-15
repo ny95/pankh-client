@@ -1,8 +1,9 @@
-import 'dart:ffi';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/mail_provider.dart';
 import '../providers/theme_provider.dart';
 import 'blur.dart';
 
@@ -16,8 +17,8 @@ class SideMenu extends StatelessWidget {
   final Duration duration;
   final bool mouseRegion;
   final EdgeInsets padding;
-  final onEnter;
-  final onExit;
+  final void Function(PointerEnterEvent)? onEnter;
+  final void Function(PointerExitEvent)? onExit;
   const SideMenu({
     super.key,
     required this.width,
@@ -32,7 +33,7 @@ class SideMenu extends StatelessWidget {
     this.onEnter,
     this.onExit,
   });
-  childWithMouseAction() {
+  Widget childWithMouseAction() {
     return mouseRegion
         ? MouseRegion(onEnter: onEnter, onExit: onExit, child: child)
         : child;
@@ -40,7 +41,6 @@ class SideMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var size = MediaQuery.of(context).size;
     return animated
         ? AnimatedContainer(
           padding: padding,
@@ -58,100 +58,121 @@ class SideMenu extends StatelessWidget {
 }
 
 class SideMenuList extends StatelessWidget {
-  SideMenuList({
+  const SideMenuList({
     super.key,
     required this.width,
     required this.height,
     this.hidden = false,
   });
 
-  final dynamic width;
-
-  final dynamic height;
-  late bool isSmallScreen;
-  late BuildContext _context;
-
-  bool hidden;
+  final double width;
+  final double height;
+  final bool hidden;
   Widget getSideMenuList({
-    required width,
+    required BuildContext context,
+    required double width,
+    required bool isSmallScreen,
     dynamic icon,
     dynamic label,
     dynamic badge,
     bool? border = false,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      height: 50,
-      padding: EdgeInsets.symmetric(
-        horizontal: (!isSmallScreen) ? 25 : 16,
-        vertical: 8,
-      ),
-      decoration: BoxDecoration(
-        border:
-            border == true
-                ? Border(
-                  bottom: BorderSide(color: Theme.of(_context).dividerColor),
-                )
-                : null,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (icon != null)
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        padding: EdgeInsets.symmetric(
+          horizontal: (!isSmallScreen) ? 25 : 16,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          border:
+              border == true
+                  ? Border(
+                    bottom: BorderSide(color: Theme.of(context).dividerColor),
+                  )
+                  : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (icon != null)
+              Flexible(
+                flex: 1,
+                child: Icon(
+                  icon as IconData?,
+                ),
+              ),
             Flexible(
-              flex: 1,
-              child: Icon(
-                icon as IconData?,
-                // color: Colors.white70,
-              ),
-            ),
-          Flexible(
-            flex: 10,
-            child: Padding(
-              padding: EdgeInsets.only(left: (icon == null) ? 0 : 16),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (label != null)
-                    Flexible(
-                      flex: 1,
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: (icon == null) ? 12 : 14,
-                          height: 1.5, // Optional: adjust line height
+              flex: 10,
+              child: Padding(
+                padding: EdgeInsets.only(left: (icon == null) ? 0 : 16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (label != null)
+                      Flexible(
+                        flex: 1,
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: (icon == null) ? 12 : 14,
+                            height: 1.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow:
-                            TextOverflow.ellipsis, // Optional: handle overflow
                       ),
-                    ),
-                  if (badge != null && !hidden)
-                    Flexible(
-                      flex: 1,
-                      child: Text(
-                        badge ?? '',
-                        style: const TextStyle(height: 1.5),
-                        overflow: TextOverflow.ellipsis,
+                    if (badge != null && !hidden)
+                      Flexible(
+                        flex: 1,
+                        child: Text(
+                          badge ?? '',
+                          style: const TextStyle(height: 1.5),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  IconData _folderIcon(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('inbox')) return Icons.inbox;
+    if (n.contains('sent')) return Icons.send;
+    if (n.contains('draft')) return Icons.drafts_outlined;
+    if (n.contains('spam') || n.contains('junk')) {
+      return Icons.report_gmailerrorred_rounded;
+    }
+    if (n.contains('trash') || n.contains('bin')) {
+      return Icons.delete_outline_rounded;
+    }
+    if (n.contains('archive') || n.contains('all mail')) {
+      return Icons.mail_outline_rounded;
+    }
+    if (n.contains('star')) return Icons.star_border;
+    if (n.contains('important')) return Icons.label_important_outline_rounded;
+    return Icons.folder_outlined;
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    _context = context;
+    final mailProvider = Provider.of<MailProvider>(context);
     double opacity = 1;
-    var size = MediaQuery.of(context).size;
-    isSmallScreen = size.width < 800;
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.width < 800;
+    final folders = mailProvider.folders;
+    final selectedFolder = mailProvider.selectedFolder;
     return ListView(
       children: [
         if (!isSmallScreen)
@@ -159,11 +180,11 @@ class SideMenuList extends StatelessWidget {
             height: 65,
             margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor.withOpacity(opacity),
+              color: Theme.of(context).cardColor.withValues(alpha: opacity),
               borderRadius: BorderRadius.circular(15.0),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withValues(alpha: 0.2),
                   spreadRadius: 1,
                   blurRadius: 5,
                   offset: const Offset(1, 1),
@@ -219,10 +240,10 @@ class SideMenuList extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(!isSmallScreen ? 15.0 : 0.0),
             // color: const Color(0xFF232b23),
-            color: Theme.of(context).cardColor.withOpacity(opacity),
+            color: Theme.of(context).cardColor.withValues(alpha: opacity),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 spreadRadius: 1,
                 blurRadius: 5,
                 offset: const Offset(1, 1),
@@ -256,103 +277,48 @@ class SideMenuList extends StatelessWidget {
                       ),
                     ],
                   ),
-                if (isSmallScreen)
+                if (folders.isEmpty)
                   getSideMenuList(
+                    context: context,
                     width: width,
-                    icon: Icons.all_inbox_rounded,
-                    label: "All inboxes",
+                    isSmallScreen: isSmallScreen,
+                    label: 'Loading folders…',
                   ),
+                if (folders.isNotEmpty)
+                  ...folders.map((folder) {
+                    final isSelected =
+                        selectedFolder?.path == folder.path;
+                    return Container(
+                      color:
+                          isSelected
+                              ? Theme.of(context)
+                                  .dividerColor
+                                  .withValues(alpha: 0.15)
+                              : Colors.transparent,
+                      child: getSideMenuList(
+                        context: context,
+                        width: width,
+                        isSmallScreen: isSmallScreen,
+                        icon: _folderIcon(folder.name),
+                        label: folder.name,
+                        onTap: () {
+                          mailProvider.selectFolder(folder);
+                        },
+                      ),
+                    );
+                  }),
                 getSideMenuList(
+                  context: context,
                   width: width,
-                  icon: Icons.inbox,
-                  label: isSmallScreen ? 'Primary' : 'Inbox',
-                  badge: '99+',
-                ),
-                if (isSmallScreen)
-                  getSideMenuList(
-                    width: width,
-                    icon: Icons.sell_rounded,
-                    label: 'Promotion',
-                    badge: '20',
-                  ),
-                if (isSmallScreen)
-                  getSideMenuList(
-                    width: width,
-                    icon: Icons.group,
-                    label: 'Social',
-                    badge: '85',
-                  ),
-                if (isSmallScreen)
-                  getSideMenuList(width: width, label: 'All labels'),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.star_border,
-                  label: 'Stared',
-                  badge: '12',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.access_time_rounded,
-                  label: 'Snoozed',
-                  badge: '12',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.label_important_outline_rounded,
-                  label: 'Important',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.send,
-                  label: 'Sent',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.schedule_send,
-                  label: 'Scheduled',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.outbox_rounded,
-                  label: 'Outbox',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.drafts_outlined,
-                  label: 'Drafts',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.mail_outline_rounded,
-                  label: 'All mail',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.report_gmailerrorred_rounded,
-                  label: 'Spam',
-                  badge: '5',
-                ),
-                getSideMenuList(
-                  width: width,
-                  icon: Icons.delete_outline_rounded,
-                  label: 'Bin',
-                  badge: '5',
-                  border: true,
-                ),
-                getSideMenuList(
-                  width: width,
+                  isSmallScreen: isSmallScreen,
                   icon: Icons.settings_rounded,
                   label: 'Settings',
                   badge: '5',
                 ),
                 getSideMenuList(
+                  context: context,
                   width: width,
+                  isSmallScreen: isSmallScreen,
                   icon: Icons.help_outline_outlined,
                   label: 'Help & Feedback',
                   badge: '5',
