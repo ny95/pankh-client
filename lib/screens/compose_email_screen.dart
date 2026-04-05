@@ -1,10 +1,62 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:provider/provider.dart';
-import '../services/smtp_service.dart';
+import '../services/backend_api_service.dart';
+import '../services/draft_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/mail_provider.dart';
+import '../providers/settings_provider.dart';
+
+class ComposeEmailController {
+  Future<bool> Function({bool forceServer})? _saveDraft;
+  bool Function()? _hasContent;
+
+  bool get hasDraftContent => _hasContent?.call() ?? false;
+
+  Future<bool> saveDraftNow({bool forceServer = false}) async {
+    if (_saveDraft == null) return false;
+    return _saveDraft!.call(forceServer: forceServer);
+  }
+
+  void _bind({
+    required Future<bool> Function({bool forceServer}) saveDraft,
+    required bool Function() hasContent,
+  }) {
+    _saveDraft = saveDraft;
+    _hasContent = hasContent;
+  }
+
+  void _unbind() {
+    _saveDraft = null;
+    _hasContent = null;
+  }
+}
 
 class ComposeEmail extends StatefulWidget {
-  const ComposeEmail({super.key});
+  final bool embedded;
+  final ValueChanged<String>? onSubjectChanged;
+  final ComposeEmailController? controller;
+  final String? initialTo;
+  final String? initialCc;
+  final String? initialBcc;
+  final String? initialSubject;
+  final String? initialBody;
+  final String? initialMessageId;
+  const ComposeEmail({
+    super.key,
+    this.embedded = false,
+    this.onSubjectChanged,
+    this.controller,
+    this.initialTo,
+    this.initialCc,
+    this.initialBcc,
+    this.initialSubject,
+    this.initialBody,
+    this.initialMessageId,
+  });
   @override
   State<ComposeEmail> createState() => _ComposeEmail();
 }
@@ -24,6 +76,389 @@ class _ComposeEmail extends State<ComposeEmail> {
   String? selectedValue;
   Map<String, dynamic> alertMessage = {};
   bool _isLoading = false;
+  bool _showFormatBar = false;
+  late final quill.QuillController _quillController;
+  final FocusNode _editorFocus = FocusNode();
+  final FocusNode _quillFocusNode = FocusNode();
+  final ScrollController _quillScrollController = ScrollController();
+  final TextEditingController _subjectController = TextEditingController();
+  final TextEditingController _toController = TextEditingController();
+  final TextEditingController _ccController = TextEditingController();
+  final TextEditingController _bccController = TextEditingController();
+  Timer? _draftDebounce;
+  late final String _draftId;
+  late final String _draftMessageId;
+  DateTime? _lastServerDraftSave;
+  final List<String> _attachments = [];
+  String? _lastDraftFingerprint;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftId = DateTime.now().millisecondsSinceEpoch.toString();
+    _draftMessageId =
+        widget.initialMessageId?.trim().isNotEmpty == true
+            ? widget.initialMessageId!.trim()
+            : '<draft-$_draftId@local>';
+    to = widget.initialTo?.trim() ?? '';
+    option['cc'] = widget.initialCc?.trim() ?? '';
+    option['bcc'] = widget.initialBcc?.trim() ?? '';
+    option['subject'] = widget.initialSubject?.trim() ?? '';
+    option['body'] = widget.initialBody?.trim() ?? '';
+    final settings = context.read<SettingsProvider>();
+    option['isHtml'] = settings.composeHtml;
+    _toController.text = to;
+    _ccController.text = option['cc'];
+    _bccController.text = option['bcc'];
+    _subjectController.text = option['subject'];
+    final initialBody =
+        settings.autoQuote && (option['body'] ?? '').toString().isNotEmpty
+            ? _quoteText(option['body'] ?? '')
+            : option['body'] ?? '';
+    _quillController = quill.QuillController(
+      document: quill.Document()..insert(0, initialBody),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    _quillController.addListener(() {
+      final plain = _quillController.document.toPlainText().trimRight();
+      final isHtml = settings.composeHtml;
+      option['isHtml'] = isHtml;
+      option['body'] = isHtml ? _toSimpleHtml(plain) : plain;
+      _scheduleDraftSave();
+    });
+    widget.controller?._bind(
+      saveDraft: saveDraftNow,
+      hasContent: _hasDraftContent,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onSubjectChanged?.call(option['subject']?.toString() ?? '');
+    });
+  }
+
+  @override
+  void dispose() {
+    _draftDebounce?.cancel();
+    _editorFocus.dispose();
+    _quillController.dispose();
+    _subjectController.dispose();
+    _toController.dispose();
+    _ccController.dispose();
+    _bccController.dispose();
+    _quillFocusNode.dispose();
+    _quillScrollController.dispose();
+    widget.controller?._unbind();
+    super.dispose();
+  }
+
+  String _quoteText(String text) {
+    final lines = text.toString().trimRight().split('\n');
+    return lines.map((line) => '> $line').join('\n');
+  }
+
+  String _toSimpleHtml(String text) {
+    final escaped =
+        text
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    return '<p>${escaped.replaceAll('\n', '<br>')}</p>';
+  }
+
+  Future<void> _sendMail(AuthProvider authProvider) async {
+    final mailProvider = Provider.of<MailProvider>(context, listen: false);
+    if (to == '' && option['cc'] == '' && option['bcc'] == '') {
+      setState(() {
+        alertMessage['content'] = 'Add at least one recipient.';
+      });
+      return;
+    }
+    if (username == null || username!.isEmpty) {
+      setState(() {
+        alertMessage['content'] = 'Login required to send email.';
+      });
+      return;
+    }
+
+    final toList = to
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final ccList = (option['cc'] ?? '')
+        .toString()
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final bccList = (option['bcc'] ?? '')
+        .toString()
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (toList.isEmpty && ccList.isEmpty && bccList.isEmpty) {
+      setState(() {
+        alertMessage['content'] = 'Add at least one recipient.';
+      });
+      return;
+    }
+
+    setState(() {
+      option['username'] = username;
+      _isLoading = true;
+    });
+
+    String status;
+    try {
+      final body = option['body']?.toString() ?? '';
+      final isHtml = option['isHtml'] == true;
+      if (authProvider.isOAuthAccount &&
+          authProvider.serverSessionToken != null &&
+          authProvider.oauthProvider != null) {
+        await BackendApiService.sendProviderEmail(
+          sessionToken: authProvider.serverSessionToken!,
+          provider: authProvider.oauthProvider!,
+          to: toList,
+          cc: ccList,
+          bcc: bccList,
+          subject: option['subject'] ?? '',
+          text: isHtml ? null : body,
+          html: isHtml ? body : null,
+          attachmentPaths: _attachments,
+        );
+      } else {
+        final account = authProvider.activeAccount;
+        final password = authProvider.password;
+        if (account == null || password == null || password.isEmpty) {
+          throw Exception('SMTP credentials missing.');
+        }
+        await BackendApiService.sendSmtpEmail(
+          host: account.smtpHost,
+          port: account.smtpPort,
+          secure: account.smtpSecure,
+          username: account.smtpUserName,
+          password: password,
+          from: username!,
+          to: toList,
+          cc: ccList,
+          bcc: bccList,
+          subject: option['subject'] ?? '',
+          text: isHtml ? null : body,
+          html: isHtml ? body : null,
+          attachmentPaths: _attachments,
+        );
+      }
+      status = 'Message sent successfully!';
+      await _deleteDraft();
+    } on UnauthorizedRequestException {
+      mailProvider.markOAuthSessionExpired(
+        'Your login session expired. Sign in again before sending mail.',
+      );
+      status = 'Session expired. Sign in again to continue.';
+    } catch (_) {
+      status = 'Failed to send the message!';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      alertMessage['title'] = status;
+      _isLoading = false;
+    });
+  }
+
+  void _showInfo(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _scheduleDraftSave() {
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(const Duration(milliseconds: 500), () async {
+      await _saveDraft();
+    });
+  }
+
+  bool _hasDraftContent() {
+    return to.trim().isNotEmpty ||
+        (option['cc'] ?? '').toString().trim().isNotEmpty ||
+        (option['bcc'] ?? '').toString().trim().isNotEmpty ||
+        (option['subject'] ?? '').toString().trim().isNotEmpty ||
+        (option['body'] ?? '').toString().trim().isNotEmpty;
+  }
+
+  Future<bool> saveDraftNow({bool forceServer = false}) async {
+    if (!_hasDraftContent()) return false;
+    if (forceServer) {
+      _lastServerDraftSave = null;
+    }
+    await _saveDraft();
+    return true;
+  }
+
+  Future<void> _saveDraft() async {
+    final accountKey = username ?? 'local';
+    if ((to.isEmpty) &&
+        (option['cc'] ?? '').toString().trim().isEmpty &&
+        (option['bcc'] ?? '').toString().trim().isEmpty &&
+        (option['subject'] ?? '').toString().trim().isEmpty &&
+        (option['body'] ?? '').toString().trim().isEmpty) {
+      return;
+    }
+    final draft = <String, dynamic>{
+      'id': _draftId,
+      'messageId': _draftMessageId,
+      'updatedAt': DateTime.now().toIso8601String(),
+      'to': to,
+      'cc': option['cc'] ?? '',
+      'bcc': option['bcc'] ?? '',
+      'subject': option['subject'] ?? '',
+      'body': option['body'] ?? '',
+      'attachments': List<String>.from(_attachments),
+    };
+    final fingerprint = [
+      draft['to'],
+      draft['cc'],
+      draft['bcc'],
+      draft['subject'],
+      draft['body'],
+      (draft['attachments'] as List).join(','),
+    ].join('|');
+    if (_lastDraftFingerprint == fingerprint) return;
+    await DraftService.saveDraft(accountKey: accountKey, draft: draft);
+    _lastDraftFingerprint = fingerprint;
+    await _saveDraftToServer(draft);
+  }
+
+  @override
+  void didUpdateWidget(covariant ComposeEmail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onSubjectChanged?.call(option['subject']?.toString() ?? '');
+    });
+  }
+
+  Future<void> _deleteDraft() async {
+    final accountKey = username ?? 'local';
+    await DraftService.deleteDraft(accountKey: accountKey, draftId: _draftId);
+    await _deleteDraftFromServer();
+  }
+
+  Future<void> _saveDraftToServer(Map<String, dynamic> draft) async {
+    final mailProvider = Provider.of<MailProvider>(context, listen: false);
+    if (!mailProvider.hasAuth) return;
+    final now = DateTime.now();
+    if (_lastServerDraftSave != null &&
+        now.difference(_lastServerDraftSave!) <
+            const Duration(seconds: 8)) {
+      return;
+    }
+    _lastServerDraftSave = now;
+    await mailProvider.saveDraftToServer(
+      messageId: _draftMessageId,
+      to: draft['to']?.toString() ?? '',
+      cc: draft['cc']?.toString() ?? '',
+      bcc: draft['bcc']?.toString() ?? '',
+      subject: draft['subject']?.toString() ?? '',
+      body: draft['body']?.toString() ?? '',
+    );
+  }
+
+  Future<void> _deleteDraftFromServer() async {
+    final mailProvider = Provider.of<MailProvider>(context, listen: false);
+    if (!mailProvider.hasAuth) return;
+    await mailProvider.deleteDraftFromServer(_draftMessageId);
+  }
+
+  Future<void> _pickAttachments() async {
+    final files = await openFiles();
+    if (files.isEmpty) return;
+    setState(() {
+      _attachments.addAll(files.map((f) => f.path));
+      option['attachments'] = List<String>.from(_attachments);
+    });
+    _scheduleDraftSave();
+  }
+
+  Future<void> _pickPhoto() async {
+    const group = XTypeGroup(
+      label: 'images',
+      extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+    );
+    final file = await openFile(acceptedTypeGroups: [group]);
+    if (file == null) return;
+    setState(() {
+      _attachments.add(file.path);
+      option['attachments'] = List<String>.from(_attachments);
+    });
+    _scheduleDraftSave();
+  }
+
+  Future<void> _insertLink() async {
+    final urlController = TextEditingController();
+    final textController = TextEditingController();
+    final selection = await showDialog<Map<String, String>?>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Insert link'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(labelText: 'URL'),
+                ),
+                TextField(
+                  controller: textController,
+                  decoration: const InputDecoration(
+                    labelText: 'Text (optional)',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, {
+                    'url': urlController.text.trim(),
+                    'text': textController.text.trim(),
+                  });
+                },
+                child: const Text('Insert'),
+              ),
+            ],
+          ),
+    );
+    if (selection == null) return;
+    final url = selection['url'] ?? '';
+    if (url.isEmpty) return;
+    final text = selection['text'] ?? '';
+    final current = _quillController.selection;
+    final length = current.end - current.start;
+    if (length > 0) {
+      _quillController.formatSelection(quill.LinkAttribute(url));
+    } else {
+      final insertText = text.isEmpty ? url : text;
+      _quillController.replaceText(
+        current.start,
+        0,
+        insertText,
+        TextSelection.collapsed(offset: current.start + insertText.length),
+      );
+      _quillController.formatText(
+        current.start,
+        insertText.length,
+        quill.LinkAttribute(url),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,52 +467,54 @@ class _ComposeEmail extends State<ComposeEmail> {
     width = size.width;
     isSmallScreen = width < 800;
     final authProvider = Provider.of<AuthProvider>(context);
+    final settings = context.watch<SettingsProvider>();
+    final allowFormatting = settings.composeHtml;
+    final fontFamily = settings.defaultFont;
     username = authProvider.email;
-    return Scaffold(
-      body: SafeArea(
-        child: Stack(
+    final showHeader = !widget.embedded;
+    final body = Stack(
+      children: [
+        Column(
           children: [
-            Column(
-              children: [
-                if (!isSmallScreen)
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
-                    color: Colors.grey.shade400,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            if (showHeader && !isSmallScreen)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
+                color: Colors.grey.shade400,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('New mail'),
+                    Row(
                       children: [
-                        const Text('New mail'),
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () {},
-                              icon: const Icon(Icons.open_in_full_rounded),
-                              iconSize: 16,
-                              selectedIcon: const Icon(
-                                Icons.close_fullscreen_rounded,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              iconSize: 16,
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
+                        IconButton(
+                          onPressed: () {},
+                          icon: const Icon(Icons.open_in_full_rounded),
+                          iconSize: 16,
+                          selectedIcon: const Icon(
+                            Icons.close_fullscreen_rounded,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          iconSize: 16,
+                          icon: const Icon(Icons.close_rounded),
                         ),
                       ],
                     ),
-                  ),
-                if (isSmallScreen)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
+                  ],
+                ),
+              ),
+            if (showHeader && isSmallScreen)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                         IconButton(
                           onPressed: () {
                             Navigator.pop(context);
@@ -131,40 +568,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                             ),
                             IconButton(
                               onPressed: () async {
-                                if (to == '' &&
-                                    option['cc'] == '' &&
-                                    option['bcc'] == '') {
-                                  setState(() {
-                                    alertMessage['content'] =
-                                        'Add at least one recipient.';
-                                  });
-                                  return;
-                                }
-                                if (username == null ||
-                                    username!.isEmpty ||
-                                    authProvider.password == null ||
-                                    authProvider.password!.isEmpty) {
-                                  setState(() {
-                                    alertMessage['content'] =
-                                        'Login required to send email.';
-                                  });
-                                  return;
-                                }
-                                setState(() {
-                                  option['username'] = username;
-                                  _isLoading = true;
-                                });
-                                final status =
-                                    await SmtpService(
-                                      username: username!,
-                                      to: to,
-                                      option: option,
-                                      password: authProvider.password,
-                                    ).sendMail();
-                                setState(() {
-                                  alertMessage['title'] = status;
-                                  _isLoading = false;
-                                });
+                                await _sendMail(authProvider);
                               },
                               color: Colors.white70,
                               icon: const Icon(Icons.send_rounded),
@@ -280,12 +684,15 @@ class _ComposeEmail extends State<ComposeEmail> {
                       const SizedBox(width: 20),
                       Expanded(
                         child: TextField(
+                          controller: _toController,
                           onChanged: (value) {
                             setState(() {
                               to = value;
                               option['to'] = value;
                             });
+                            _scheduleDraftSave();
                           },
+                          onEditingComplete: _scheduleDraftSave,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
                             hintStyle: TextStyle(color: Colors.grey),
@@ -347,11 +754,14 @@ class _ComposeEmail extends State<ComposeEmail> {
                                   const SizedBox(width: 20),
                                   Expanded(
                                     child: TextField(
+                                      controller: _ccController,
                                       onChanged: (value) {
                                         setState(() {
                                           option['cc'] = value;
                                         });
+                                        _scheduleDraftSave();
                                       },
+                                      onEditingComplete: _scheduleDraftSave,
                                       decoration: const InputDecoration(
                                         border: InputBorder.none,
                                         hintStyle: TextStyle(
@@ -381,11 +791,14 @@ class _ComposeEmail extends State<ComposeEmail> {
                                   const SizedBox(width: 20),
                                   Expanded(
                                     child: TextField(
+                                      controller: _bccController,
                                       onChanged: (value) {
                                         setState(() {
                                           option['bcc'] = value;
                                         });
+                                        _scheduleDraftSave();
                                       },
+                                      onEditingComplete: _scheduleDraftSave,
                                       decoration: const InputDecoration(
                                         border: InputBorder.none, //
                                         hintStyle: TextStyle(
@@ -411,10 +824,13 @@ class _ComposeEmail extends State<ComposeEmail> {
                     children: [
                       Expanded(
                         child: TextField(
+                          controller: _subjectController,
                           onChanged: (value) {
                             setState(() {
                               option['subject'] = value;
                             });
+                            _scheduleDraftSave();
+                            widget.onSubjectChanged?.call(value);
                           },
                           onTap: () {
                             setState(() {
@@ -433,30 +849,131 @@ class _ComposeEmail extends State<ComposeEmail> {
                     ],
                   ),
                 ),
+                if (!isSmallScreen && _showFormatBar && allowFormatting)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        fontFamily: fontFamily,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
+                      child: quill.QuillSimpleToolbar(
+                        controller: _quillController,
+                        config: const quill.QuillSimpleToolbarConfig(
+                          multiRowsDisplay: false,
+                          showCodeBlock: false,
+                          showInlineCode: false,
+                          showFontFamily: false,
+                          showFontSize: false,
+                          showSearchButton: false,
+                        ),
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: TextField(
-                      onChanged: (value) {
-                        setState(() {
-                          option['body'] = value;
-                        });
-                      },
-                      onTap: () {
-                        setState(() {
-                          showCc = false;
-                          showBcc = false;
-                        });
-                      },
-                      maxLines: 50,
-                      decoration: const InputDecoration(
-                        border: InputBorder.none, //
-                        hintText: 'Compose email',
-                        hintStyle: TextStyle(color: Colors.grey),
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        fontFamily: fontFamily,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
+                      child: quill.QuillEditor(
+                        controller: _quillController,
+                        focusNode: _quillFocusNode,
+                        scrollController: _quillScrollController,
+                        config: const quill.QuillEditorConfig(
+                          placeholder: 'Compose email',
+                          autoFocus: false,
+                        ),
                       ),
                     ),
                   ),
                 ),
+                if (!isSmallScreen)
+                  Container(
+                    height: 56,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Colors.grey.shade600),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await _sendMail(authProvider);
+                          },
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('Send'),
+                        ),
+                        const SizedBox(width: 8),
+                        _ComposeAction(
+                          icon: Icons.format_color_text_outlined,
+                          tooltip: 'Formatting',
+                          onPressed:
+                              allowFormatting
+                                  ? () {
+                                    setState(() {
+                                      _showFormatBar = !_showFormatBar;
+                                    });
+                                  }
+                                  : null,
+                        ),
+                        _ComposeAction(
+                          icon: Icons.attach_file_rounded,
+                          tooltip: 'Attach',
+                          onPressed: _pickAttachments,
+                        ),
+                        _ComposeAction(
+                          icon: Icons.link_rounded,
+                          tooltip: 'Insert link',
+                          onPressed: _insertLink,
+                        ),
+                        _ComposeAction(
+                          icon: Icons.emoji_emotions_outlined,
+                          tooltip: 'Emoji',
+                          onPressed: () => _showInfo('Emoji not implemented.'),
+                        ),
+                        _ComposeAction(
+                          icon: Icons.change_history_outlined,
+                          tooltip: 'Drive',
+                          onPressed: () => _showInfo('Drive not implemented.'),
+                        ),
+                        _ComposeAction(
+                          icon: Icons.image_outlined,
+                          tooltip: 'Insert photo',
+                          onPressed: _pickPhoto,
+                        ),
+                        _ComposeAction(
+                          icon: Icons.lock_outline,
+                          tooltip: 'Confidential',
+                          onPressed: () => _showInfo('Confidential not implemented.'),
+                        ),
+                        _ComposeAction(
+                          icon: Icons.edit_outlined,
+                          tooltip: 'Signature',
+                          onPressed: () => _showInfo('Signature not implemented.'),
+                        ),
+                        const Spacer(),
+                        _ComposeAction(
+                          icon: Icons.more_vert_rounded,
+                          tooltip: 'More',
+                          onPressed: () => _showInfo('More options not implemented.'),
+                        ),
+                        _ComposeAction(
+                          icon: Icons.delete_outline,
+                          tooltip: 'Discard',
+                          onPressed: () async {
+                            await _deleteDraft();
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             if (alertMessage.isNotEmpty)
@@ -476,10 +993,6 @@ class _ComposeEmail extends State<ComposeEmail> {
                       setState(() {
                         alertMessage = {};
                       });
-                      // Future.delayed(const Duration(seconds: 3), () {
-                      //   Navigator.of(context).pop();
-                      // });
-                      // Navigator.pop(context);
                     },
                     child: const Text(
                       'OK',
@@ -490,7 +1003,36 @@ class _ComposeEmail extends State<ComposeEmail> {
               ),
             if (_isLoading) const Center(child: CircularProgressIndicator()),
           ],
-        ),
+        );
+    if (widget.embedded) {
+      return body;
+    }
+    return Scaffold(
+      body: SafeArea(child: body),
+    );
+  }
+}
+
+class _ComposeAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _ComposeAction({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
       ),
     );
   }

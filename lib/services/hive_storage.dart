@@ -1,18 +1,30 @@
-import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 
 class HiveStorage {
   static const String _hiveCommonBox = 'commonBox';
   static const List<String> _hiveBoxList = [_hiveCommonBox];
+  static bool _initialized = false;
 
   static Future<void> init() async {
     try {
-      final appDocumentDirectory =
-          await path_provider.getApplicationDocumentsDirectory();
-      Hive.init(appDocumentDirectory.path);
-      for (final boxName in _hiveBoxList) {
-        await Hive.openBox(boxName);
+      if (_initialized) return;
+      if (kIsWeb) {
+        await Hive.initFlutter();
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+        await Hive.initFlutter(directory.path);
       }
+      for (final boxName in _hiveBoxList) {
+        if (!Hive.isBoxOpen(boxName)) {
+          await Hive.openBox(boxName);
+        }
+      }
+      _initialized = true;
     } catch (e) {
       throw Exception('Failed to initialize Hive: $e');
     }
@@ -74,6 +86,7 @@ class HiveStorage {
   static Future<void> close() async {
     try {
       await Hive.close();
+      _initialized = false;
     } catch (e) {
       throw Exception('Failed to close Hive: $e');
     }

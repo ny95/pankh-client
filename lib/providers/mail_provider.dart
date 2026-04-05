@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:enough_mail/enough_mail.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import '../services/backend_api_service.dart';
 import '../services/imap_service.dart';
 import '../services/mail_cache.dart';
 import '../models/mail_folder.dart';
@@ -24,6 +25,9 @@ class MailProvider with ChangeNotifier {
   Timer? _pollTimer;
   String? _email;
   String? _password;
+  String? _imapHost;
+  int? _imapPort;
+  bool? _imapSecure;
   final int _pageSize = 20;
   List<MailFolder> _folders = [];
   MailFolder? _selectedFolder;
@@ -37,6 +41,27 @@ class MailProvider with ChangeNotifier {
   final List<String> _searchHistory = [];
   String _localQuery = '';
   List<MimeMessage> _filteredMails = [];
+  MimeMessage? _draftToCompose;
+  String? _authMethod;
+  String? _oauthProvider;
+  String? _serverSessionToken;
+  String? _backendNextCursor;
+  bool _needsOAuthRelogin = false;
+  String? _authError;
+
+  bool get _supportsRemoteMailbox => !kIsWeb;
+  bool get _useBackendMailApi =>
+      kIsWeb && (_serverSessionToken?.isNotEmpty ?? false);
+  bool get _usesOauthImap =>
+      !kIsWeb &&
+      (_authMethod?.toLowerCase() == 'oauth') &&
+      (_oauthProvider?.isNotEmpty ?? false) &&
+      (_serverSessionToken?.isNotEmpty ?? false);
+  bool get _canUseImap =>
+      !_needsOAuthRelogin &&
+      _email != null &&
+      ((_password?.isNotEmpty ?? false) || _usesOauthImap);
+  bool get _canLoadMail => _useBackendMailApi || _canUseImap;
 
   MimeMessage? get selectedMail => _selectedMail;
   List<MimeMessage> get mails =>
@@ -63,6 +88,20 @@ class MailProvider with ChangeNotifier {
   bool get isAllSelected =>
       _mails.isNotEmpty && _selectedKeys.length == _mails.length;
   bool get isPartiallySelected => _selectedKeys.isNotEmpty && !isAllSelected;
+  bool get hasAuth => _email != null && ((_password?.isNotEmpty ?? false) || _usesOauthImap || _useBackendMailApi);
+  bool get needsOAuthRelogin => _needsOAuthRelogin;
+  String? get authError => _authError;
+
+  MimeMessage? takeDraftToCompose() {
+    final draft = _draftToCompose;
+    _draftToCompose = null;
+    return draft;
+  }
+
+  void requestOpenDraft(MimeMessage message) {
+    _draftToCompose = message;
+    notifyListeners();
+  }
 
   int get pageStart {
     if (_searchContext != _SearchContext.none) {
@@ -123,9 +162,30 @@ class MailProvider with ChangeNotifier {
   void updateAuth(AuthProvider auth) {
     final nextEmail = auth.email;
     final nextPassword = auth.password;
-    final changed = nextEmail != _email || nextPassword != _password;
+    final nextAccount = auth.activeAccount;
+    final nextImapHost = nextAccount?.imapHost;
+    final nextImapPort = nextAccount?.imapPort;
+    final nextImapSecure = nextAccount?.imapSecure;
+    final nextAuthMethod = nextAccount?.authMethod;
+    final nextOauthProvider = nextAccount?.oauthProvider;
+    final nextServerSessionToken = nextAccount?.serverSessionToken;
+    final changed =
+        nextEmail != _email ||
+        nextPassword != _password ||
+        nextImapHost != _imapHost ||
+        nextImapPort != _imapPort ||
+        nextImapSecure != _imapSecure ||
+        nextAuthMethod != _authMethod ||
+        nextOauthProvider != _oauthProvider ||
+        nextServerSessionToken != _serverSessionToken;
     _email = nextEmail;
     _password = nextPassword;
+    _imapHost = nextImapHost;
+    _imapPort = nextImapPort;
+    _imapSecure = nextImapSecure;
+    _authMethod = nextAuthMethod;
+    _oauthProvider = nextOauthProvider;
+    _serverSessionToken = nextServerSessionToken;
 
     if (!auth.isLoggedIn) {
       _mails = [];
@@ -145,7 +205,16 @@ class MailProvider with ChangeNotifier {
       _searchHistory.clear();
       _localQuery = '';
       _filteredMails = [];
+      _backendNextCursor = null;
+      _needsOAuthRelogin = false;
+      _authError = null;
       _pollTimer?.cancel();
+      _imapHost = null;
+      _imapPort = null;
+      _imapSecure = null;
+      _authMethod = null;
+      _oauthProvider = null;
+      _serverSessionToken = null;
       if (changed) {
         notifyListeners();
       }
@@ -169,15 +238,121 @@ class MailProvider with ChangeNotifier {
       _localQuery = '';
       _filteredMails = [];
       _selectedKeys.clear();
+      _backendNextCursor = null;
+      _needsOAuthRelogin = false;
+      _authError = null;
       MailCache.clear();
       _loadFromCache();
-      loadFolders().then((_) => fetchInitial());
+      if (_canLoadMail) {
+        loadFolders().then((_) => fetchInitial());
+      } else {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
-    _startPolling();
+    if (_canLoadMail) {
+      _startPolling();
+    } else {
+      _pollTimer?.cancel();
+    }
+  }
+
+
+  void _handleExpiredOAuthSession([String? message]) {
+    _needsOAuthRelogin = true;
+    _authError =
+        message ??
+        'Your login session expired. Sign in again to continue syncing mail.';
+    _isLoading = false;
+    _isLoadingMore = false;
+    _isRefreshing = false;
+    _pollTimer?.cancel();
+    notifyListeners();
+  }
+
+  void markOAuthSessionExpired([String? message]) {
+    _handleExpiredOAuthSession(message);
+  }
+
+  Future<T?> _guardBackendSession<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on UnauthorizedRequestException {
+      _handleExpiredOAuthSession();
+      return null;
+    }
+  }
+
+  Future<String?> _resolveImapAccessToken() async {
+    if (!_usesOauthImap || _serverSessionToken == null || _oauthProvider == null) {
+      return null;
+    }
+    try {
+      final token = await BackendApiService.fetchBrokeredAccessToken(
+        sessionToken: _serverSessionToken!,
+        provider: _oauthProvider!,
+      );
+      _needsOAuthRelogin = false;
+      _authError = null;
+      return token;
+    } on UnauthorizedRequestException {
+      _handleExpiredOAuthSession();
+      return null;
+    }
+  }
+
+  List<MimeMessage> _parseBackendMessages(List<String> raws) {
+    final messages = <MimeMessage>[];
+    for (final raw in raws) {
+      try {
+        messages.add(MimeMessage.parseFromText(raw));
+      } catch (_) {}
+    }
+    return messages;
+  }
+
+  void _setBackendWindow() {
+    _windowStartSeq = _mails.isEmpty ? null : 1;
+    _windowEndSeq = _mails.isEmpty ? null : _mails.length;
+  }
+
+  Future<void> _fetchBackendMessages({required bool refresh}) async {
+    if (_serverSessionToken == null) {
+      _isLoading = false;
+      _isRefreshing = false;
+      notifyListeners();
+      return;
+    }
+    final page = await _guardBackendSession(
+      () => BackendApiService.fetchMessages(
+        sessionToken: _serverSessionToken!,
+        folderPath: _selectedFolder?.path,
+        pageSize: _pageSize,
+      ),
+    );
+    if (page == null) {
+      return;
+    }
+    final previousKeys = _mails.map(_messageKey).toSet();
+    _backendNextCursor = page.nextCursor;
+    _mailboxMessages = page.total;
+    _mails = _mergeAndSort(_parseBackendMessages(page.rawMessages), replace: true);
+    _rebuildLocalFilter();
+    _updateSequenceRange();
+    _setBackendWindow();
+    _syncSelectionAfterReplace();
+    if (refresh) {
+      _newMailCount = _mails.where((mail) => !previousKeys.contains(_messageKey(mail))).length;
+    }
   }
 
   Future<void> fetchInitial() async {
-    if (_email == null || _password == null) {
+    if (!_canLoadMail) {
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+    if (_email == null) {
       _mails = [];
       _isLoading = false;
       notifyListeners();
@@ -186,18 +361,34 @@ class MailProvider with ChangeNotifier {
     _isLoading = true;
     _selectedKeys.clear();
     notifyListeners();
-    final result = await ImapService().fetchLatest(
-      email: _email!,
-      password: _password!,
-      pageSize: _pageSize,
-      mailboxPath: _selectedFolder?.path ?? 'INBOX',
-    );
-    _mailboxMessages = result.mailboxMessages;
-    _mails = _mergeAndSort(result.messages, replace: true);
-    _rebuildLocalFilter();
-    _updateSequenceRange();
-    _setWindowFromCurrent();
-    _syncSelectionAfterReplace();
+    if (_useBackendMailApi) {
+      await _fetchBackendMessages(refresh: false);
+    } else {
+      final oauthAccessToken = await _resolveImapAccessToken();
+      final secret = _password ?? '';
+      if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) {
+        _mails = [];
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      final result = await ImapService().fetchLatest(
+        email: _email!,
+        password: secret,
+        oauthAccessToken: oauthAccessToken,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
+        pageSize: _pageSize,
+        mailboxPath: _selectedFolder?.path ?? 'INBOX',
+      );
+      _mailboxMessages = result.mailboxMessages;
+      _mails = _mergeAndSort(result.messages, replace: true);
+      _rebuildLocalFilter();
+      _updateSequenceRange();
+      _setWindowFromCurrent();
+      _syncSelectionAfterReplace();
+    }
     if (_searchContext == _SearchContext.none) {
       await _saveCache();
     }
@@ -206,7 +397,7 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> refreshLatest() async {
-    if (_email == null || _password == null) return;
+    if (!_canLoadMail || _email == null) return;
     if (_isRefreshing) return;
     if (_searchContext == _SearchContext.query) {
       await search(_searchQuery);
@@ -219,18 +410,33 @@ class MailProvider with ChangeNotifier {
     _isRefreshing = true;
     _selectedKeys.clear();
     notifyListeners();
-    final result = await ImapService().fetchLatest(
-      email: _email!,
-      password: _password!,
-      pageSize: _pageSize,
-      mailboxPath: _selectedFolder?.path ?? 'INBOX',
-    );
-    _mailboxMessages = result.mailboxMessages;
-    _mails = _mergeAndSort(result.messages, replace: true);
-    _rebuildLocalFilter();
-    _updateSequenceRange();
-    _setWindowFromCurrent();
-    _syncSelectionAfterReplace();
+    if (_useBackendMailApi) {
+      await _fetchBackendMessages(refresh: true);
+    } else {
+      final oauthAccessToken = await _resolveImapAccessToken();
+      final secret = _password ?? '';
+      if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) {
+        _isRefreshing = false;
+        notifyListeners();
+        return;
+      }
+      final result = await ImapService().fetchLatest(
+        email: _email!,
+        password: secret,
+        oauthAccessToken: oauthAccessToken,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
+        pageSize: _pageSize,
+        mailboxPath: _selectedFolder?.path ?? 'INBOX',
+      );
+      _mailboxMessages = result.mailboxMessages;
+      _mails = _mergeAndSort(result.messages, replace: true);
+      _rebuildLocalFilter();
+      _updateSequenceRange();
+      _setWindowFromCurrent();
+      _syncSelectionAfterReplace();
+    }
     if (_searchContext == _SearchContext.none) {
       await _saveCache();
     }
@@ -239,8 +445,40 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> loadOlder({bool replace = false}) async {
-    if (_email == null || _password == null) return;
+    if (!_canLoadMail || _email == null) return;
     if (_isLoadingMore) return;
+    if (_useBackendMailApi) {
+      if (_serverSessionToken == null || _backendNextCursor == null) return;
+      _isLoadingMore = true;
+      notifyListeners();
+      final page = await _guardBackendSession(
+        () => BackendApiService.fetchMessages(
+          sessionToken: _serverSessionToken!,
+          folderPath: _selectedFolder?.path,
+          pageSize: _pageSize,
+          cursor: _backendNextCursor,
+        ),
+      );
+      if (page == null) {
+        return;
+      }
+      _backendNextCursor = page.nextCursor;
+      _mailboxMessages = page.total;
+      _mails = _mergeAndSort(_parseBackendMessages(page.rawMessages), replace: false);
+      _rebuildLocalFilter();
+      _updateSequenceRange();
+      _setBackendWindow();
+      _syncSelectionAfterReplace();
+      if (_searchContext == _SearchContext.none) {
+        await _saveCache();
+      }
+      _isLoadingMore = false;
+      notifyListeners();
+      return;
+    }
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
     final anchor = replace ? _windowStartSeq : _minSequenceId;
     if (anchor == null || anchor <= 1) return;
 
@@ -248,7 +486,11 @@ class MailProvider with ChangeNotifier {
     notifyListeners();
     final result = await ImapService().fetchOlder(
       email: _email!,
-      password: _password!,
+      password: secret,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       rangeEnd: anchor - 1,
       pageSize: _pageSize,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
@@ -269,8 +511,22 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> loadNewer({bool replace = false}) async {
-    if (_email == null || _password == null) return;
+    if (!_canLoadMail || _email == null) return;
     if (_isRefreshing) return;
+    if (_useBackendMailApi) {
+      _isRefreshing = true;
+      notifyListeners();
+      await _fetchBackendMessages(refresh: true);
+      if (_searchContext == _SearchContext.none) {
+        await _saveCache();
+      }
+      _isRefreshing = false;
+      notifyListeners();
+      return;
+    }
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
     final anchor = replace ? _windowEndSeq : _maxSequenceId;
     if (anchor == null) return;
 
@@ -278,7 +534,11 @@ class MailProvider with ChangeNotifier {
     notifyListeners();
     final result = await ImapService().fetchNewer(
       email: _email!,
-      password: _password!,
+      password: secret,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       rangeStart: anchor + 1,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
     );
@@ -355,15 +615,41 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> loadFolders() async {
-    if (_email == null || _password == null) return;
-    final mailboxes = await ImapService().listMailboxes(
-      email: _email!,
-      password: _password!,
-    );
-    final folders =
-        mailboxes
-            .map((m) => MailFolder(name: m.name, path: m.path))
-            .toList();
+    if (!_canLoadMail) {
+      _folders = [];
+      _selectedFolder = null;
+      notifyListeners();
+      return;
+    }
+    if (_email == null) return;
+    List<MailFolder> folders;
+    if (_useBackendMailApi) {
+      final fetchedFolders = await _guardBackendSession(
+        () => BackendApiService.fetchFolders(
+          sessionToken: _serverSessionToken!,
+        ),
+      );
+      if (fetchedFolders == null) {
+        return;
+      }
+      folders = fetchedFolders;
+    } else {
+      final secret = _password ?? '';
+      final oauthAccessToken = await _resolveImapAccessToken();
+      if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
+      final mailboxes = await ImapService().listMailboxes(
+        email: _email!,
+        password: secret,
+        oauthAccessToken: oauthAccessToken,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
+      );
+      folders =
+          mailboxes
+              .map((m) => MailFolder(name: m.name, path: m.path))
+              .toList();
+    }
     folders.sort((a, b) {
       int rank(MailFolder f) {
         final n = f.name.toLowerCase();
@@ -414,7 +700,10 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> toggleImportant(MimeMessage message) async {
-    if (_email == null || _password == null) return;
+    if (_email == null) return;
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
     final flags = message.flags ?? <String>[];
     final isFlagged =
         flags.any((f) => f.toLowerCase().contains('flagged')) ||
@@ -422,7 +711,11 @@ class MailProvider with ChangeNotifier {
     final add = !isFlagged;
     final ok = await ImapService().toggleFlagged(
       email: _email!,
-      password: _password!,
+      password: secret,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       message: message,
       add: add,
@@ -464,12 +757,21 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<bool> setSelectedRead(bool read) async {
-    if (_email == null || _password == null) return false;
+    if (_email == null) return false;
     final selected = _selectedMessages();
     if (selected.isEmpty) return false;
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) {
+      return false;
+    }
     final ok = await ImapService().setSeen(
       email: _email!,
-      password: _password!,
+      password: secret,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       messages: selected,
       seen: read,
@@ -497,6 +799,9 @@ class MailProvider with ChangeNotifier {
     final ok = await ImapService().setFlagged(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       messages: selected,
       add: add,
@@ -528,6 +833,9 @@ class MailProvider with ChangeNotifier {
       ok = await ImapService().moveMessages(
         email: _email!,
         password: _password!,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
         mailboxPath: _selectedFolder?.path ?? 'INBOX',
         targetPath: trash.path,
         messages: selected,
@@ -536,6 +844,9 @@ class MailProvider with ChangeNotifier {
       ok = await ImapService().deleteMessages(
         email: _email!,
         password: _password!,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
         mailboxPath: _selectedFolder?.path ?? 'INBOX',
         messages: selected,
       );
@@ -565,6 +876,9 @@ class MailProvider with ChangeNotifier {
       ok = await ImapService().moveMessages(
         email: _email!,
         password: _password!,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
         mailboxPath: _selectedFolder?.path ?? 'INBOX',
         targetPath: trash.path,
         messages: [message],
@@ -573,6 +887,9 @@ class MailProvider with ChangeNotifier {
       ok = await ImapService().deleteMessages(
         email: _email!,
         password: _password!,
+        imapHost: _imapHost,
+        imapPort: _imapPort,
+        imapSecure: _imapSecure,
         mailboxPath: _selectedFolder?.path ?? 'INBOX',
         messages: [message],
       );
@@ -587,6 +904,9 @@ class MailProvider with ChangeNotifier {
     final ok = await ImapService().setSeen(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       messages: [message],
       seen: read,
@@ -614,6 +934,9 @@ class MailProvider with ChangeNotifier {
     final ok = await ImapService().moveMessages(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       targetPath: target.path,
       messages: [message],
@@ -649,6 +972,9 @@ class MailProvider with ChangeNotifier {
     final ok = await ImapService().moveMessages(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       targetPath: folder.path,
       messages: selected,
@@ -682,6 +1008,9 @@ class MailProvider with ChangeNotifier {
     final ok = await ImapService().copyMessages(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       mailboxPath: _selectedFolder?.path ?? 'INBOX',
       targetPath: folder.path,
       messages: selected,
@@ -731,8 +1060,73 @@ class MailProvider with ChangeNotifier {
     return null;
   }
 
+  MailFolder? _draftFolder() {
+    return _findFolderByHints(['draft']);
+  }
+
+  Future<bool> saveDraftToServer({
+    required String messageId,
+    required String to,
+    required String cc,
+    required String bcc,
+    required String subject,
+    required String body,
+  }) async {
+    if (_email == null || _password == null) return false;
+    final draftFolder = _draftFolder();
+    if (draftFolder == null) return false;
+    await ImapService().deleteByMessageId(
+      email: _email!,
+      password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
+      mailboxPath: draftFolder.path,
+      messageId: messageId,
+    );
+    return ImapService().appendDraft(
+      email: _email!,
+      password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
+      mailboxPath: draftFolder.path,
+      from: _email!,
+      to: to,
+      cc: cc,
+      bcc: bcc,
+      subject: subject,
+      body: body,
+      messageId: messageId,
+    );
+  }
+
+  Future<bool> deleteDraftFromServer(String messageId) async {
+    if (_email == null || _password == null) return false;
+    final draftFolder = _draftFolder();
+    if (draftFolder == null) return false;
+    return ImapService().deleteByMessageId(
+      email: _email!,
+      password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
+      mailboxPath: draftFolder.path,
+      messageId: messageId,
+    );
+  }
+
   Future<void> search(String query) async {
     final trimmed = query.trim();
+    if (_useBackendMailApi) {
+      if (trimmed.isEmpty) {
+        clearLocalFilter();
+      } else {
+        applyLocalFilter(trimmed);
+      }
+      return;
+    }
+    if (!_supportsRemoteMailbox) return;
     if (trimmed.isEmpty) {
       await clearSearch();
       return;
@@ -740,7 +1134,10 @@ class MailProvider with ChangeNotifier {
     _localQuery = '';
     _filteredMails = [];
     _addSearchHistory(trimmed);
-    if (_email == null || _password == null) return;
+    if (_email == null) return;
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
     _searchContext = _SearchContext.query;
     _searchQuery = trimmed;
     _isLoading = true;
@@ -755,6 +1152,9 @@ class MailProvider with ChangeNotifier {
     final result = await ImapService().searchMessages(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       searchCriteria: parsed.criteria,
       mailboxPath: parsed.mailboxPath ?? _selectedFolder?.path ?? 'INBOX',
       pageSize: _pageSize,
@@ -840,6 +1240,8 @@ class MailProvider with ChangeNotifier {
   }
 
   Future<void> setInboxCategory(String category) async {
+    if (_useBackendMailApi) return;
+    if (!_supportsRemoteMailbox) return;
     if (_selectedFolder == null ||
         _selectedFolder!.name.toLowerCase() != 'inbox') {
       return;
@@ -865,7 +1267,10 @@ class MailProvider with ChangeNotifier {
       return;
     }
 
-    if (_email == null || _password == null) return;
+    if (_email == null) return;
+    final secret = _password ?? '';
+    final oauthAccessToken = await _resolveImapAccessToken();
+    if (secret.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty)) return;
     _searchContext = _SearchContext.category;
     _isLoading = true;
     notifyListeners();
@@ -879,6 +1284,9 @@ class MailProvider with ChangeNotifier {
     final result = await ImapService().searchMessages(
       email: _email!,
       password: _password!,
+      imapHost: _imapHost,
+      imapPort: _imapPort,
+      imapSecure: _imapSecure,
       searchCriteria: query,
       mailboxPath: 'INBOX',
       pageSize: _pageSize,
@@ -1068,12 +1476,14 @@ class MailProvider with ChangeNotifier {
 
   Future<void> _loadFromCache() async {
     if (_password == null) return;
-    final cached = await MailCache.load(password: _password!);
-    if (cached.isEmpty) return;
-    _mails = _mergeAndSort(cached, replace: true);
-    _updateSequenceRange();
-    _isLoading = false;
-    notifyListeners();
+    try {
+      final cached = await MailCache.load(password: _password!);
+      if (cached.isEmpty) return;
+      _mails = _mergeAndSort(cached, replace: true);
+      _updateSequenceRange();
+      _isLoading = false;
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _startPolling() {

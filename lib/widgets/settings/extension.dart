@@ -80,11 +80,6 @@ class ExtensionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return isSmallScreen
-        ? Scaffold(
-          appBar: AppBar(title: const Text("Extensions"), centerTitle: true),
-          body: _extensionWidget(),
-        )
-        : _extensionWidget();
+    return _extensionWidget();
   }
 }

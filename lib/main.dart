@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:projectwebview/providers/auth_provider.dart';
-import 'package:projectwebview/providers/common_provider.dart';
-import 'package:projectwebview/providers/inbox_type_provider.dart';
-import 'package:projectwebview/providers/layout_provider.dart';
-import 'package:projectwebview/providers/mail_provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pankh/providers/auth_provider.dart';
+import 'package:pankh/providers/common_provider.dart';
+import 'package:pankh/providers/inbox_type_provider.dart';
+import 'package:pankh/providers/layout_provider.dart';
+import 'package:pankh/providers/mail_provider.dart';
+import 'package:pankh/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'providers/theme_provider.dart';
 import 'services/hive_storage.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'widgets/security/app_lock_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await HiveStorage.init(); // Initialize Hive
+  await HiveStorage.init();
+  final authProvider = AuthProvider();
+  await authProvider.initialize();
   runApp(
     MultiProvider(
       providers: [
@@ -20,7 +26,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LayoutProvider()),
         ChangeNotifierProvider(create: (_) => InboxTypeProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider.value(value: authProvider),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProxyProvider<AuthProvider, MailProvider>(
           create: (_) => MailProvider(),
           update: (_, auth, mail) => mail!..updateAuth(auth),
@@ -40,6 +47,13 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        FlutterQuillLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: FlutterQuillLocalizations.supportedLocales,
       theme: ThemeData(
         canvasColor: const Color(0xfff7f7fa),
         primaryColor: Colors.blue,
@@ -60,10 +74,12 @@ class MyApp extends StatelessWidget {
               : themeProvider.theme == 'dark'
               ? ThemeMode.dark
               : ThemeMode.system,
-      home: Consumer<AuthProvider>(
-        builder: (context, auth, _) {
-          return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
-        },
+      home: AppLockGate(
+        child: Consumer<AuthProvider>(
+          builder: (context, auth, _) {
+            return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
+          },
+        ),
       ),
     );
   }

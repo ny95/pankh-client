@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:projectwebview/providers/common_provider.dart';
-import 'package:projectwebview/providers/layout_provider.dart';
-import 'package:projectwebview/providers/mail_provider.dart';
+import 'package:pankh/providers/common_provider.dart';
+import 'package:pankh/providers/layout_provider.dart';
+import 'package:pankh/providers/mail_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'mail_view.dart';

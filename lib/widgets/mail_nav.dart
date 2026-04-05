@@ -382,7 +382,7 @@ class MailNavState extends State<MailNav> {
                                     });
                                   },
                                 );
-                              }).toList(),
+                              }),
                               const Divider(),
                               Align(
                                 alignment: Alignment.centerRight,
@@ -848,29 +848,39 @@ class _InboxTab extends StatelessWidget {
             ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color:
-                    active
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                  color:
-                      active
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                ),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isTight = constraints.maxWidth < 110;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color:
+                        active
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                  ),
+                  if (!isTight) const SizedBox(width: 8),
+                  if (!isTight)
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight:
+                              active ? FontWeight.w600 : FontWeight.w400,
+                          color:
+                              active
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
@@ -10,12 +12,20 @@ class SmtpService {
     required this.to,
     required this.option,
     this.password,
+    this.smtpHost,
+    this.smtpPort,
+    this.smtpSecure,
+    this.smtpUserName,
   });
 
   final String username;
   final String to;
   final Map<String, dynamic> option;
   final String? password;
+  final String? smtpHost;
+  final int? smtpPort;
+  final bool? smtpSecure;
+  final String? smtpUserName;
 
   Future<String> sendMail() async {
     final resolvedPassword = password ?? EmailConfig.smtpPassword;
@@ -44,7 +54,21 @@ class SmtpService {
     }
 
     message.subject = option['subject'] ?? '';
-    message.html = option['body'] ?? '';
+    final body = option['body'] ?? '';
+    final isHtml = option['isHtml'] == true;
+    if (isHtml) {
+      message.html = body.toString();
+    } else {
+      message.text = body.toString();
+    }
+    final attachments =
+        (option['attachments'] as List?)?.cast<String>() ?? const [];
+    for (final path in attachments) {
+      final file = File(path);
+      if (await file.exists()) {
+        message.attachments.add(FileAttachment(file));
+      }
+    }
 
     try {
       final sendReport = await send(message, smtpServer);
@@ -63,6 +87,21 @@ class SmtpService {
   }
 
   SmtpServer getSmtpServer(String email, String password) {
+    if (smtpHost != null && smtpHost!.isNotEmpty) {
+      final port = smtpPort ?? 587;
+      final secure = smtpSecure ?? false;
+      final authUser = (smtpUserName == null || smtpUserName!.isEmpty)
+          ? email
+          : smtpUserName!;
+      return SmtpServer(
+        smtpHost!,
+        username: authUser,
+        password: password,
+        port: port,
+        ssl: secure && port == 465,
+        ignoreBadCertificate: !secure,
+      );
+    }
     if (email.endsWith('@gmail.com')) {
       return gmail(email, password);
     } else if (email.endsWith('@yahoo.com')) {
@@ -86,6 +125,22 @@ class SmtpService {
       );
     } else {
       throw Exception('Unsupported email provider');
+    }
+  }
+
+  Future<bool> testConnection() async {
+    if (smtpHost == null || smtpHost!.isEmpty) return false;
+    final port = smtpPort ?? 587;
+    try {
+      final socket = await Socket.connect(
+        smtpHost!,
+        port,
+        timeout: const Duration(seconds: 5),
+      );
+      socket.destroy();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

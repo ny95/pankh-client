@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:pankh/models/account.dart';
 
 class AccountList extends StatefulWidget {
   final ValueChanged<String> onPressed;
-  final List<String> accounts;
+  final List<Account> accounts;
   final String? activeEmail;
-  final ValueChanged<String> onSelectAccount;
+  final ValueChanged<Account> onSelectAccount;
   final ValueChanged<String> onRemoveAccount;
 
   const AccountList({
@@ -26,7 +27,7 @@ class AccountListState extends State<AccountList>
   late List<AnimationController> _animationControllers;
   late List<Animation<double>> _iconTurns;
 
-  List<String> get _accountEmails => widget.accounts;
+  List<Account> get _accounts => widget.accounts;
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class AccountListState extends State<AccountList>
 
   void _initializeAnimations() {
     _animationControllers = List.generate(
-      _accountEmails.length,
+      _accounts.length,
       (index) => AnimationController(
         duration: const Duration(milliseconds: 300),
         vsync: this,
@@ -73,21 +74,32 @@ class AccountListState extends State<AccountList>
 
   @override
   Widget build(BuildContext context) {
-    if (_accountEmails.isEmpty) {
+    if (_accounts.isEmpty) {
       return const Center(child: Text('No account found'));
     }
-    return ListView(
-      children: List.generate(
-        _accountEmails.length,
-        (index) => _buildEmailTile(_accountEmails[index], index),
+    return RadioGroup<String>(
+      groupValue: widget.activeEmail,
+      onChanged: (value) {
+        if (value == null) return;
+        final account = _accounts.firstWhere((a) => a.email == value);
+        widget.onSelectAccount(account);
+      },
+      child: ListView(
+        children: List.generate(
+          _accounts.length,
+          (index) => _buildEmailTile(_accounts[index], index),
+        ),
       ),
     );
   }
 
-  Widget _buildEmailTile(String email, int index) {
+  Widget _buildEmailTile(Account account, int index) {
+    final email = account.email;
     final isExpanded = _currentExpandedIndex == index;
     final isActive = widget.activeEmail == email;
+    final isSecure = account.imapSecure;
     final theme = Theme.of(context);
+    final isSmallScreen = MediaQuery.of(context).size.width < 900;
 
     return Container(
       decoration: BoxDecoration(
@@ -99,6 +111,7 @@ class AccountListState extends State<AccountList>
         children: [
           ListTile(
             dense: true,
+            horizontalTitleGap: 0.5,
             leading: RotationTransition(
               turns: _iconTurns[index],
               child: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
@@ -107,12 +120,23 @@ class AccountListState extends State<AccountList>
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (isActive)
-                      const Icon(Icons.check_circle, size: 16),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert_rounded, size: 14),
-                      onPressed: () => _showOptionsMenu(context, email),
+                    Tooltip(
+                      message:
+                          isActive ? 'Active account' : 'Set as active account',
+                      child: Radio<String>(
+                        value: email,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                     ),
+                    if (!isSecure)
+                      Tooltip(
+                        message: 'Connection is not secure',
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: Colors.orange.shade700,
+                        ),
+                      )
                   ],
                 ),
             title: Text(
@@ -123,14 +147,18 @@ class AccountListState extends State<AccountList>
                 color:
                     isActive
                         ? theme.primaryColor
-                        : (isExpanded
-                            ? theme.primaryColor
-                            : theme.textTheme.bodySmall?.color),
+                        : theme.textTheme.bodySmall?.color,
               ),
             ),
+            subtitle: Text(
+              isActive ? 'Default account' : 'Tap to view settings',
+              style: theme.textTheme.bodySmall,
+            ),
             onTap: () {
-              widget.onSelectAccount(email);
               _handleTileTap(index);
+              if (!isSmallScreen) {
+                widget.onPressed('general_setting');
+              }
             },
           ),
           AnimatedSize(
@@ -141,26 +169,22 @@ class AccountListState extends State<AccountList>
                 isExpanded
                     ? Column(
                       children: [
+                        if (isSmallScreen)
+                          _buildMenuButton(
+                            title: 'General Settings',
+                            onPressed: () => widget.onPressed('general_setting'),
+                          ),
                         _buildMenuButton(
-                          title: 'Server Setting',
-                          onPressed: () => widget.onPressed('server_setting'),
+                          title: 'Incoming Server Settings',
+                          onPressed: () => widget.onPressed('incoming_server_setting'),
                         ),
                         _buildMenuButton(
-                          title: 'Copies & Folder',
-                          onPressed: () => widget.onPressed('copies_folder'),
+                          title: 'Outgoing Server Settings',
+                          onPressed: () => widget.onPressed('outgoing_server_setting'),
                         ),
                         _buildMenuButton(
-                          title: 'Composition & Addressing',
-                          onPressed:
-                              () => widget.onPressed('composition_addressing'),
-                        ),
-                        _buildMenuButton(
-                          title: 'Junk Setting',
-                          onPressed: () => widget.onPressed('junk_setting'),
-                        ),
-                        _buildMenuButton(
-                          title: 'Disk Space',
-                          onPressed: () => widget.onPressed('disk_space'),
+                          title: 'Remove Account',
+                          onPressed: () => widget.onPressed('general_setting'),
                         ),
                       ],
                     )
@@ -195,48 +219,6 @@ class AccountListState extends State<AccountList>
       contentPadding: const EdgeInsets.symmetric(horizontal: 32),
       title: Text(title, style: const TextStyle(fontSize: 13)),
       onTap: onPressed, // ✅ fixed
-    );
-  }
-
-  void _showOptionsMenu(BuildContext context, String email) {
-    showModalBottomSheet(
-      context: context,
-      builder:
-          (context) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.check_circle_outline, size: 20),
-                title: const Text(
-                  'Set Active',
-                  style: TextStyle(fontSize: 14),
-                ),
-                onTap: () {
-                  widget.onSelectAccount(email);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit, size: 20),
-                title: const Text(
-                  'Edit Account',
-                  style: TextStyle(fontSize: 14),
-                ),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete, size: 20),
-                title: const Text(
-                  'Remove Account',
-                  style: TextStyle(fontSize: 14),
-                ),
-                onTap: () {
-                  widget.onRemoveAccount(email);
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
     );
   }
 }

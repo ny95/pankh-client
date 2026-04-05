@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:enough_mail/enough_mail.dart';
 import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart' as path_provider;
+
+import 'hive_storage.dart';
 
 class MailCache {
   static const _boxName = 'mailCache';
@@ -25,12 +26,10 @@ class MailCache {
   }
 
   static Future<void> _ensureInit() async {
-    if (_initialized) return;
-    final appDocumentDirectory =
-        await path_provider.getApplicationDocumentsDirectory();
-    await appDocumentDirectory.create(recursive: true);
-    Hive.init(appDocumentDirectory.path);
-    _initialized = true;
+    if (!_initialized) {
+      await HiveStorage.init();
+      _initialized = true;
+    }
   }
 
   static Future<void> save({
@@ -73,9 +72,11 @@ class MailCache {
   }
 
   static Future<void> clear() async {
-    if (Hive.isBoxOpen(_boxName)) {
-      await Hive.box(_boxName).close();
-    }
-    await Hive.deleteBoxFromDisk(_boxName);
+    try {
+      if (Hive.isBoxOpen(_boxName)) {
+        await Hive.box(_boxName).close();
+      }
+      await Hive.deleteBoxFromDisk(_boxName);
+    } catch (_) {}
   }
 }

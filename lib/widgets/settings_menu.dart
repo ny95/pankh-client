@@ -1,10 +1,11 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:projectwebview/widgets/settings/account/account.dart';
-import 'package:projectwebview/widgets/settings/composition.dart';
-import 'package:projectwebview/widgets/settings/extension.dart';
-import 'package:projectwebview/widgets/settings/notification.dart';
-import 'package:projectwebview/widgets/settings/security.dart';
+import 'package:pankh/widgets/open_dialog.dart';
+import 'package:pankh/widgets/settings/account/account.dart';
+import 'package:pankh/widgets/settings/composition.dart';
+import 'package:pankh/widgets/settings/extension.dart';
+import 'package:pankh/widgets/settings/notification.dart';
+import 'package:pankh/widgets/settings/security.dart';
 import 'package:provider/provider.dart';
 import '../utils/image_shade.dart';
 import '../providers/theme_provider.dart';
@@ -27,6 +28,9 @@ class SettingsMenuState extends State<SettingsMenu> {
   late String selectedInboxType;
   late String currentBackground;
   bool settingCard = true;
+  final ValueNotifier<bool> _isFullScreenCloseButtonNotifier =
+      ValueNotifier<bool>(true);
+
   final List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
@@ -149,12 +153,11 @@ class SettingsMenuState extends State<SettingsMenu> {
   }
 
   void _showThemeDialog(BuildContext context, themeProvider) {
-    showDialog(
+    CustomDialog.show(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          titlePadding: EdgeInsets.fromLTRB(24, 16, 16, 0),
-          title: Row(
+      child: Column(
+        children: [
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -167,22 +170,12 @@ class SettingsMenuState extends State<SettingsMenu> {
                     onPressed: () => _pickImage(context),
                     child: Text('My photos'),
                   ),
-                  SizedBox(width: 20),
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        Navigator.of(context).pop();
-                      });
-                    },
-                    icon: Icon(Icons.close),
-                  ),
+                  SizedBox(width: 50, height: 50,),
                 ],
               ),
             ],
           ),
-          content: SizedBox(
-            width: 850,
-            height: 420,
+          Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.vertical,
               child: Center(
@@ -196,8 +189,8 @@ class SettingsMenuState extends State<SettingsMenu> {
                             await updateTheme(img);
                           },
                           child: Container(
-                            width: 200,
-                            height: 120,
+                            width: 230,
+                            height: 130,
                             decoration: BoxDecoration(
                               boxShadow: [
                                 BoxShadow(
@@ -240,9 +233,8 @@ class SettingsMenuState extends State<SettingsMenu> {
               ),
             ),
           ),
-          backgroundColor: Theme.of(context).cardColor,
-        );
-      },
+        ],
+      )
     );
   }
 
@@ -251,81 +243,43 @@ class SettingsMenuState extends State<SettingsMenu> {
     themeProvider,
     isSmallScreen,
   ) {
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.7,
-      height: MediaQuery.of(context).size.height * 0.8,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(
-          alpha: themeProvider.bgOpacity,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Blur(
-        blur: themeProvider.bgBlur,
-        child: DefaultTabController(
-          length: 5,
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            // No appBar here
-            body: Column(
-              children: [
-                TabBar(
-                  tabAlignment: TabAlignment.center,
-                  isScrollable: true,
-                  dividerColor: Colors.black12,
-                  tabs: [
-                    Tab(icon: Icon(Icons.account_circle), text: 'Account'),
-                    Tab(icon: Icon(Icons.mail), text: 'Composition'),
-                    Tab(icon: Icon(Icons.notifications), text: 'Notifications'),
-                    Tab(icon: Icon(Icons.security), text: 'Security'),
-                    Tab(icon: Icon(Icons.extension), text: 'Extensions'),
-                  ],
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      AccountSettingsTab(isSmallScreen: isSmallScreen),
-                      CompositionSettingsTab(isSmallScreen: isSmallScreen),
-                      NotificationSettingsTab(isSmallScreen: isSmallScreen),
-                      SecuritySettingsTab(isSmallScreen: isSmallScreen),
-                      ExtensionsTab(isSmallScreen: isSmallScreen),
-                    ],
-                  ),
-                ),
-              ],
+    return DefaultTabController(
+      length: 5,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        // No appBar here
+        body: Column(
+          children: [
+            Padding(
+              padding: isSmallScreen ? const EdgeInsets.only(right: 80) : EdgeInsets.all(0),
+              child: TabBar(
+                tabAlignment: TabAlignment.center,
+                isScrollable: true,
+                dividerColor: Colors.black12,
+                tabs: [
+                  Tab(icon: Icon(Icons.account_circle), text: 'Account'),
+                  Tab(icon: Icon(Icons.mail), text: 'Composition'),
+                  Tab(icon: Icon(Icons.notifications), text: 'Notifications'),
+                  Tab(icon: Icon(Icons.security), text: 'Security'),
+                  Tab(icon: Icon(Icons.extension), text: 'Extensions'),
+                ],
+              ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Object _showAllSettingsDialog(BuildContext context, themeProvider) {
-    final isSmallScreen = MediaQuery.of(context).size.width < 600;
-    if (isSmallScreen) {
-      return Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
+            Expanded( 
+              child: TabBarView(
+                children: [
+                  AccountSettingsTab(updateFullScreenCloseButton: updateFullScreenCloseButton,),
+                  CompositionSettingsTab(isSmallScreen: isSmallScreen),
+                  NotificationSettingsTab(isSmallScreen: isSmallScreen),
+                  SecuritySettingsTab(isSmallScreen: isSmallScreen),
+                  ExtensionsTab(isSmallScreen: isSmallScreen),
+                ],
+              ),
             ),
           ],
         ),
-        body: getAllSettingsTabs(context, themeProvider, isSmallScreen),
-      );
-    } else {
-      return showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            backgroundColor: Theme.of(context).cardColor,
-            content: getAllSettingsTabs(context, themeProvider, isSmallScreen),
-          );
-        },
-      );
-    }
+      ),
+    );
   }
 
   Future<void> updateTheme(String img) async {
@@ -348,126 +302,256 @@ class SettingsMenuState extends State<SettingsMenu> {
     }
   }
 
-  List<Widget> setReadingPane({required LayoutProvider layoutProvider}) {
-    return readingPanes
-        .map(
-          (pane) => Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget setReadingPane({required LayoutProvider layoutProvider}) {
+    return RadioGroup<String>(
+      groupValue: layoutProvider.layout,
+      onChanged: (value) {
+        if (value == null) return;
+        layoutProvider.setLayout(value);
+      },
+      child: Column(
+        children:
+            readingPanes
+                .map(
+                  (pane) => Row(
                     children: [
                       Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              height: 50,
-                              child: Center(
-                                child: RadioListTile(
-                                  value: pane['value'],
-                                  groupValue: layoutProvider.layout,
-                                  onChanged: (value) {
-                                    layoutProvider.setLayout(value!);
-                                  },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isCompact = constraints.maxWidth < 220;
+                              final label = Expanded(
+                                child: Text(
+                                  pane["label"],
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
                                 ),
-                              ),
-                            ),
-                            Expanded(child: Text(pane["label"])),
-                          ],
-                        ),
-                      ), // Display the label
-                      Container(
-                        width: 70,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage("assets/images/${pane['img']}"),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        )
-        .toList(); // Convert the iterable to a list
-  }
-
-  List<Widget> setInboxType({required InboxTypeProvider inboxTypeProvider}) {
-    return inboxTypes
-        .map(
-          (pane) => Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              height: 50,
-                              child: Center(
-                                child: RadioListTile(
-                                  value: pane['value'],
-                                  groupValue: selectedInboxType,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedInboxType = value!;
-                                      inboxTypeProvider.setInboxType(value!);
-                                    });
-                                  },
+                              );
+                              final radio = SizedBox(
+                                width: 40,
+                                height: 50,
+                                child: Center(
+                                  child: RadioListTile(
+                                    value: pane['value'],
+                                  ),
                                 ),
-                              ),
-                            ),
-                            Flexible(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(pane["label"]),
-                                  if (pane["customization"])
-                                    GestureDetector(
-                                      onTap: () {},
-                                      child: Text(
-                                        "Customize",
-                                        style: TextStyle(color: Colors.blue),
+                              );
+                              final preview = Container(
+                                width: 70,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  image: DecorationImage(
+                                    image: AssetImage(
+                                      "assets/images/${pane['img']}",
+                                    ),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                              if (isCompact) {
+                                final compactLabel = ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 140,
+                                  ),
+                                  child: Text(
+                                    pane["label"],
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                );
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          radio,
+                                          const SizedBox(width: 6),
+                                          compactLabel,
+                                        ],
                                       ),
                                     ),
+                                    const SizedBox(height: 6),
+                                    preview,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.start,
+                                      children: [
+                                        radio,
+                                        label,
+                                      ],
+                                    ),
+                                  ),
+                                  preview,
                                 ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ), // Display the label
-                      Container(
-                        width: 70,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage("assets/images/${pane['img']}"),
-                            fit: BoxFit.cover,
+                              );
+                            },
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-            ],
-          ),
-        )
-        .toList(); // Convert the iterable to a list
+                )
+                .toList(),
+      ),
+    );
+  }
+
+  Widget setInboxType({required InboxTypeProvider inboxTypeProvider}) {
+    return RadioGroup<String>(
+      groupValue: selectedInboxType,
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          selectedInboxType = value;
+          inboxTypeProvider.setInboxType(value);
+        });
+      },
+      child: Column(
+        children:
+            inboxTypes
+                .map(
+                  (pane) => Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isCompact = constraints.maxWidth < 220;
+                              final label = Flexible(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      pane["label"],
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (pane["customization"])
+                                      GestureDetector(
+                                        onTap: () {},
+                                        child: const Text(
+                                          "Customize",
+                                          style: TextStyle(
+                                            color: Colors.blue,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                              final radio = SizedBox(
+                                width: 40,
+                                height: 50,
+                                child: Center(
+                                  child: RadioListTile(
+                                    value: pane['value'],
+                                  ),
+                                ),
+                              );
+                              final preview = Container(
+                                width: 70,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  image: DecorationImage(
+                                    image: AssetImage(
+                                      "assets/images/${pane['img']}",
+                                    ),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                              if (isCompact) {
+                                final compactLabel = ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 140,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        pane["label"],
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (pane["customization"])
+                                        GestureDetector(
+                                          onTap: () {},
+                                          child: const Text(
+                                            "Customize",
+                                            style: TextStyle(
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          radio,
+                                          const SizedBox(width: 6),
+                                          compactLabel,
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    preview,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        radio,
+                                        label,
+                                      ],
+                                    ),
+                                  ),
+                                  preview,
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                .toList(),
+      ),
+    );
+  }
+  void updateFullScreenCloseButton (bool status) {
+    _isFullScreenCloseButtonNotifier.value = status;
+  }
+  @override
+  void dispose() {
+    _isFullScreenCloseButtonNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -475,15 +559,17 @@ class SettingsMenuState extends State<SettingsMenu> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final layoutProvider = Provider.of<LayoutProvider>(context);
     final inboxTypeProvider = Provider.of<InboxTypeProvider>(context);
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
 
     return Container(
       width: 300,
-      margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+      margin: isSmallScreen ? null : const EdgeInsets.fromLTRB(0, 16, 16, 16),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor.withValues(
           alpha: themeProvider.bgOpacity,
         ),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(15), bottomLeft:Radius.circular(15), topRight: isSmallScreen? Radius.zero : Radius.circular(15), bottomRight: isSmallScreen ? Radius.zero : Radius.circular(15) ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -510,19 +596,65 @@ class SettingsMenuState extends State<SettingsMenu> {
                         ),
                       ),
                       padding: const EdgeInsets.only(left: 16, right: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Quick settings',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                          IconButton(
-                            onPressed:
-                                widget.onClose, // Call the onClose callback
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 80) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                onPressed:
+                                    widget.onClose, // Call the onClose callback
+                                icon: const Icon(Icons.close, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 28,
+                                  minHeight: 28,
+                                ),
+                              ),
+                            );
+                          }
+                          if (constraints.maxWidth < 140) {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Quick settings',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed:
+                                      widget.onClose, // Call the onClose callback
+                                  icon: const Icon(Icons.close, size: 18),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Quick settings',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed:
+                                    widget.onClose, // Call the onClose callback
+                                icon: const Icon(Icons.close),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     Expanded(
@@ -533,23 +665,54 @@ class SettingsMenuState extends State<SettingsMenu> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text(
-                                      'Theme',
-                                      style: TextStyle(fontSize: 16),
-                                    ),
-                                    TextButton(
-                                      onPressed:
-                                          () => _showThemeDialog(
-                                            context,
-                                            themeProvider,
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final isTight = constraints.maxWidth < 120;
+                                    if (isTight) {
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Theme',
+                                            style: TextStyle(fontSize: 16),
                                           ),
-                                      child: const Text('View All'),
-                                    ),
-                                  ],
+                                          Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: TextButton(
+                                              onPressed:
+                                                  () => _showThemeDialog(
+                                                    context,
+                                                    themeProvider,
+                                                  ),
+                                              child: const Text('View All'),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Expanded(
+                                          child: Text(
+                                            'Theme',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed:
+                                              () => _showThemeDialog(
+                                                context,
+                                                themeProvider,
+                                              ),
+                                          child: const Text('View All'),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: 10),
                                 Wrap(
@@ -619,7 +782,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                                   'Reading Pane',
                                   style: TextStyle(fontSize: 16),
                                 ),
-                                ...setReadingPane(
+                                setReadingPane(
                                   layoutProvider: layoutProvider,
                                 ),
                                 const SizedBox(height: 20),
@@ -627,7 +790,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                                   'Inbox Type',
                                   style: TextStyle(fontSize: 16),
                                 ),
-                                ...setInboxType(
+                                setInboxType(
                                   inboxTypeProvider: inboxTypeProvider,
                                 ),
                               ],
@@ -647,9 +810,29 @@ class SettingsMenuState extends State<SettingsMenu> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: ElevatedButton(
-                        onPressed:
-                            () =>
-                                _showAllSettingsDialog(context, themeProvider),
+                        onPressed: () {
+                          final scaffold = Scaffold.maybeOf(context);
+                          if (scaffold != null &&
+                              (scaffold.isEndDrawerOpen ||
+                                  scaffold.isDrawerOpen)) {
+                            Navigator.of(context).pop();
+                          }
+                          Future.microtask(
+                            () {
+                              if (!context.mounted) return;
+                              CustomDialog.show(
+                                context: context,
+                                child: getAllSettingsTabs(
+                                  context,
+                                  themeProvider,
+                                  isSmallScreen,
+                                ),
+                                isFullScreenCloseButtonListenable:
+                                    _isFullScreenCloseButtonNotifier,
+                              );
+                            },
+                          );
+                        },
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

@@ -1,9 +1,10 @@
 import 'package:enough_mail/enough_mail.dart';
 import 'package:flutter/material.dart';
-import 'package:projectwebview/providers/mail_provider.dart';
+import 'package:pankh/providers/mail_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'mail_view.dart';
+import '../screens/compose_email_screen.dart';
 import '../providers/common_provider.dart';
 import '../providers/layout_provider.dart';
 
@@ -108,7 +109,46 @@ class _EmailListItemState extends State<EmailListItem> {
               mailProvider.toggleSelection(message);
               return;
             }
+            final isDraftFolder =
+                mailProvider.selectedFolder?.name.toLowerCase().contains(
+                      'draft',
+                    ) ??
+                false;
             mailProvider.selectMail(message);
+            if (isDraftFolder) {
+              if (commonProvider.isSmallScreen) {
+                final to =
+                    message.to?.map((a) => a.email).join(', ') ?? '';
+                final cc =
+                    message.cc?.map((a) => a.email).join(', ') ?? '';
+                final bcc =
+                    message.bcc?.map((a) => a.email).join(', ') ?? '';
+                final subject = message.decodeSubject() ?? '';
+                final body =
+                    message.decodeTextPlainPart() ??
+                    message.decodeTextHtmlPart() ??
+                    '';
+                final messageId =
+                    message.getHeaderValue('Message-ID') ?? '';
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ComposeEmail(
+                          initialTo: to,
+                          initialCc: cc,
+                          initialBcc: bcc,
+                          initialSubject: subject,
+                          initialBody: body,
+                          initialMessageId: messageId,
+                        ),
+                  ),
+                );
+              } else {
+                mailProvider.requestOpenDraft(message);
+              }
+              return;
+            }
             if (!commonProvider.isSmallScreen) {
               commonProvider.setIsMailView(isMailView: true);
             } else {
@@ -152,8 +192,8 @@ class _EmailListItemState extends State<EmailListItem> {
                     ),
             padding:
                 commonProvider.isSmallScreen
-                    ? EdgeInsets.fromLTRB(12.0, 2.0, 12.0, 2.0)
-                    : EdgeInsets.fromLTRB(0, 4.0, 16, 4.0),
+                    ? EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 8.0)
+                    : EdgeInsets.fromLTRB(0, 8.0, 16, 8.0),
             child: LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth < 80) {
@@ -216,22 +256,53 @@ class _EmailListItemState extends State<EmailListItem> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  if (!commonProvider.isSmallScreen &&
-                                      !panePreviewRight)
-                                    Container(
-                                      width: 150,
-                                      margin: const EdgeInsets.only(right: 20),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          Flexible(
-                                            flex: 4,
-                                            child: SizedBox(
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isRowTight = constraints.maxWidth < 140;
+                            final left = LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isTight = constraints.maxWidth < 140;
+                                final fromStyle = TextStyle(
+                                  fontSize: 16,
+                                  fontWeight:
+                                      isRead ? FontWeight.w400 : FontWeight.w600,
+                                  color: baseColor,
+                                );
+                                final subjectStyle = TextStyle(
+                                  fontSize: 16,
+                                  fontWeight:
+                                      isRead ? FontWeight.w400 : FontWeight.w600,
+                                  color: baseColor,
+                                );
+
+                                if (isTight) {
+                                  final line = [
+                                    if (!commonProvider.isSmallScreen &&
+                                        !panePreviewRight)
+                                      from,
+                                    if (panePreviewRight ||
+                                        commonProvider.isSmallScreen)
+                                      from,
+                                    if (!commonProvider.isSmallScreen &&
+                                        !panePreviewRight)
+                                      '$subject - $newMessageString',
+                                  ].where((s) => s.isNotEmpty).join(' ');
+                                  return Text(
+                                    line,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: subjectStyle,
+                                  );
+                                }
+
+                                return Row(
+                                  children: [
+                                    if (!commonProvider.isSmallScreen &&
+                                        !panePreviewRight)
+                                      Flexible(
+                                        flex: 3,
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
                                               width: 40,
                                               height: 40,
                                               child: IconButton(
@@ -257,185 +328,199 @@ class _EmailListItemState extends State<EmailListItem> {
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          Flexible(
-                                            flex: 8,
-                                            child: Text(
-                                              from,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight:
-                                                    isRead
-                                                        ? FontWeight.w400
-                                                        : FontWeight.w600,
-                                                color: baseColor,
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                from,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: fromStyle,
                                               ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  Flexible(
-                                    child: Text(
-                                      '${panePreviewRight || commonProvider.isSmallScreen ? from : ''} ${(!commonProvider.isSmallScreen && !panePreviewRight) ? '$subject - $newMessageString' : ''}',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight:
-                                            isRead
-                                                ? FontWeight.w400
-                                                : FontWeight.w600,
-                                        color: baseColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (!showHoverActions)
-                              SizedBox(
-                                width: 90,
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    _formatListTimestamp(date),
-                                    maxLines: 1,
-                                    softWrap: false,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.right,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: baseColor,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            else
-                              SizedBox(
-                                width: hasUnsubscribe ? 320 : 200,
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (hasUnsubscribe)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 8,
-                                          ),
-                                          child: ActionChip(
-                                            label: const Text(
-                                              'Unsubscribe',
-                                              style: TextStyle(fontSize: 11),
-                                            ),
-                                            materialTapTargetSize:
-                                                MaterialTapTargetSize.shrinkWrap,
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 0,
-                                                ),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            onPressed: () async {
-                                              final uri =
-                                                  _extractUnsubscribeUri(
-                                                    listUnsubscribe!,
-                                                  );
-                                              if (uri == null) {
-                                                _showSnack(
-                                                  context,
-                                                  'No unsubscribe link found.',
-                                                );
-                                                return;
-                                              }
-                                              final ok = await launchUrl(
-                                                uri,
-                                                mode: LaunchMode
-                                                    .externalApplication,
-                                              );
-                                              if (!ok) {
-                                                _showSnack(
-                                                  context,
-                                                  'Failed to open unsubscribe link.',
-                                                );
-                                              }
-                                            },
-                                          ),
+                                          ],
                                         ),
-                                      _HoverIcon(
-                                        icon: Icons.archive_outlined,
-                                        tooltip: 'Archive',
-                                        onPressed: () async {
-                                          final ok =
-                                              await mailProvider.archiveMessage(
-                                                message,
-                                              );
-                                          if (!ok) {
-                                            _showSnack(
-                                              context,
-                                              'Archive not available.',
-                                            );
-                                          }
-                                        },
                                       ),
-                                      _HoverIcon(
-                                        icon: Icons.delete_outline,
-                                        tooltip: 'Delete',
-                                        onPressed: () async {
-                                          final ok =
-                                              await mailProvider.deleteMessage(
-                                                message,
-                                              );
-                                          if (!ok) {
-                                            _showSnack(
-                                              context,
-                                              'Failed to delete.',
-                                            );
-                                          }
-                                        },
+                                    Flexible(
+                                      flex: 5,
+                                      child: Text(
+                                        '${panePreviewRight || commonProvider.isSmallScreen ? from : ''} ${(!commonProvider.isSmallScreen && !panePreviewRight) ? '$subject - $newMessageString' : ''}',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: subjectStyle,
                                       ),
-                                      _HoverIcon(
-                                        icon: Icons.mark_email_unread_outlined,
-                                        tooltip: 'Mark as unread',
-                                        onPressed: () async {
-                                          final ok =
-                                              await mailProvider.setMessageRead(
-                                                message,
-                                                false,
-                                              );
-                                          if (!ok) {
-                                            _showSnack(
-                                              context,
-                                              'Failed to mark unread.',
-                                            );
-                                          }
-                                        },
-                                      ),
-                                      _HoverIcon(
-                                        icon: Icons.snooze_outlined,
-                                        tooltip: 'Snooze',
-                                        onPressed: () async {
-                                          final ok =
-                                              await mailProvider.snoozeMessage(
-                                                message,
-                                              );
-                                          if (!ok) {
-                                            _showSnack(
-                                              context,
-                                              'Snooze not available.',
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+
+                            final timestamp = Text(
+                              _formatListTimestamp(date),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: baseColor,
                               ),
-                          ],
+                            );
+
+                            final hoverActions = Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (hasUnsubscribe)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      right: 8,
+                                    ),
+                                    child: ActionChip(
+                                      label: const Text(
+                                        'Unsubscribe',
+                                        style: TextStyle(fontSize: 11),
+                                      ),
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 0,
+                                          ),
+                                      visualDensity:
+                                          VisualDensity.compact,
+                                      onPressed: () async {
+                                        final uri =
+                                            _extractUnsubscribeUri(
+                                              listUnsubscribe,
+                                            );
+                                        if (uri == null) {
+                                          _showSnack(
+                                            context,
+                                            'No unsubscribe link found.',
+                                          );
+                                          return;
+                                        }
+                                        final ok = await launchUrl(
+                                          uri,
+                                          mode: LaunchMode
+                                              .externalApplication,
+                                        );
+                                        if (!context.mounted) return;
+                                        if (!ok) {
+                                          _showSnack(
+                                            context,
+                                            'Failed to open unsubscribe link.',
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                _HoverIcon(
+                                  icon: Icons.archive_outlined,
+                                  tooltip: 'Archive',
+                                  onPressed: () async {
+                                    final ok =
+                                        await mailProvider.archiveMessage(
+                                          message,
+                                        );
+                                    if (!context.mounted) return;
+                                    if (!ok) {
+                                      _showSnack(
+                                        context,
+                                        'Archive not available.',
+                                      );
+                                    }
+                                  },
+                                ),
+                                _HoverIcon(
+                                  icon: Icons.delete_outline,
+                                  tooltip: 'Delete',
+                                  onPressed: () async {
+                                    final ok =
+                                        await mailProvider.deleteMessage(
+                                          message,
+                                        );
+                                    if (!context.mounted) return;
+                                    if (!ok) {
+                                      _showSnack(
+                                        context,
+                                        'Failed to delete.',
+                                      );
+                                    }
+                                  },
+                                ),
+                                _HoverIcon(
+                                  icon: Icons.mark_email_unread_outlined,
+                                  tooltip: 'Mark as unread',
+                                  onPressed: () async {
+                                    final ok =
+                                        await mailProvider.setMessageRead(
+                                          message,
+                                          false,
+                                        );
+                                    if (!context.mounted) return;
+                                    if (!ok) {
+                                      _showSnack(
+                                        context,
+                                        'Failed to mark unread.',
+                                      );
+                                    }
+                                  },
+                                ),
+                                _HoverIcon(
+                                  icon: Icons.snooze_outlined,
+                                  tooltip: 'Snooze',
+                                  onPressed: () async {
+                                    final ok =
+                                        await mailProvider.snoozeMessage(
+                                          message,
+                                        );
+                                    if (!context.mounted) return;
+                                    if (!ok) {
+                                      _showSnack(
+                                        context,
+                                        'Snooze not available.',
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            );
+
+                            if (isRowTight) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  left,
+                                  const SizedBox(height: 2),
+                                  timestamp,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(child: left),
+                                const SizedBox(width: 8),
+                                if (!showHoverActions)
+                                  SizedBox(
+                                    width: 90,
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: timestamp,
+                                    ),
+                                  )
+                                else
+                                  SizedBox(
+                                    width: hasUnsubscribe ? 320 : 200,
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: hoverActions,
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
+
                         if (commonProvider.isSmallScreen || panePreviewRight)
                           Row(
                             children: [

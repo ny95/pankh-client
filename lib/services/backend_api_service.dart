@@ -1,0 +1,214 @@
+import 'dart:io';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../models/mail_folder.dart';
+
+class BackendMailPage {
+  const BackendMailPage({
+    required this.rawMessages,
+    required this.total,
+    this.nextCursor,
+  });
+
+  final List<String> rawMessages;
+  final int total;
+  final String? nextCursor;
+}
+
+
+class UnauthorizedRequestException implements Exception {
+  const UnauthorizedRequestException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class BackendApiService {
+  static const String _defaultBaseUrl = String.fromEnvironment(
+    'PANKH_API_BASE_URL',
+    defaultValue: 'http://localhost:3000/api',
+  );
+
+  static String get baseUrl => _defaultBaseUrl;
+
+  static Future<String> fetchGoogleAuthUrl({required String redirectUri}) async {
+    final uri = Uri.parse('$baseUrl/auth/google').replace(
+      queryParameters: {'redirectUri': redirectUri},
+    );
+    final response = await http.get(uri);
+    final json = _decode(response);
+    return json['authUrl'] as String;
+  }
+
+  static Future<String> fetchBrokeredAccessToken({
+    required String sessionToken,
+    required String provider,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/token/$provider'),
+      headers: _authHeaders(sessionToken),
+    );
+    final json = _decode(response);
+    return json['accessToken'] as String;
+  }
+
+  static Future<List<MailFolder>> fetchFolders({
+    required String sessionToken,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/mail/folders'),
+      headers: _authHeaders(sessionToken),
+    );
+    final json = _decode(response);
+    final folders = (json as List)
+        .map(
+          (item) => MailFolder(
+            name: item['name'] as String,
+            path: item['path'] as String,
+          ),
+        )
+        .toList();
+    return folders;
+  }
+
+  static Future<BackendMailPage> fetchMessages({
+    required String sessionToken,
+    String? folderPath,
+    String? cursor,
+    int pageSize = 20,
+  }) async {
+    final query = <String, String>{
+      'pageSize': '$pageSize',
+    };
+    if (folderPath != null && folderPath.isNotEmpty) {
+      query['folderPath'] = folderPath;
+    }
+    if (cursor != null && cursor.isNotEmpty) {
+      query['cursor'] = cursor;
+    }
+    final uri = Uri.parse('$baseUrl/mail/messages').replace(queryParameters: query);
+    final response = await http.get(uri, headers: _authHeaders(sessionToken));
+    final json = _decode(response);
+    final messages = (json['messages'] as List)
+        .map((item) => item['raw'] as String)
+        .toList();
+    return BackendMailPage(
+      rawMessages: messages,
+      total: json['total'] as int? ?? messages.length,
+      nextCursor: json['nextCursor'] as String?,
+    );
+  }
+
+
+  static Future<void> sendProviderEmail({
+    required String sessionToken,
+    required String provider,
+    required List<String> to,
+    List<String> cc = const [],
+    List<String> bcc = const [],
+    required String subject,
+    String? text,
+    String? html,
+    List<String> attachmentPaths = const [],
+  }) async {
+    await http.post(
+      Uri.parse('$baseUrl/send-email'),
+      headers: {
+        ..._authHeaders(sessionToken),
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'provider': provider,
+        'to': to,
+        'subject': subject,
+        if ((text ?? '').isNotEmpty) 'text': text,
+        if ((html ?? '').isNotEmpty) 'html': html,
+        if (attachmentPaths.isNotEmpty)
+          'attachments': await _encodeAttachments(attachmentPaths),
+      }),
+    ).then(_ensureSuccess);
+  }
+
+  static Future<void> sendSmtpEmail({
+    required String host,
+    required int port,
+    required bool secure,
+    required String username,
+    required String password,
+    required String from,
+    required List<String> to,
+    List<String> cc = const [],
+    List<String> bcc = const [],
+    required String subject,
+    String? text,
+    String? html,
+    List<String> attachmentPaths = const [],
+  }) async {
+    await http.post(
+      Uri.parse('$baseUrl/send-email/smtp'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'host': host,
+        'port': port,
+        'secure': secure,
+        'username': username,
+        'password': password,
+        'from': from,
+        'to': to,
+        if (cc.isNotEmpty) 'cc': cc,
+        if (bcc.isNotEmpty) 'bcc': bcc,
+        'subject': subject,
+        if ((text ?? '').isNotEmpty) 'text': text,
+        if ((html ?? '').isNotEmpty) 'html': html,
+        if (attachmentPaths.isNotEmpty)
+          'attachments': await _encodeAttachments(attachmentPaths),
+      }),
+    ).then(_ensureSuccess);
+  }
+
+  static Map<String, String> _authHeaders(String sessionToken) => {
+        'Authorization': 'Bearer $sessionToken',
+      };
+
+  static Future<List<Map<String, String>>> _encodeAttachments(List<String> attachmentPaths) async {
+    final encoded = <Map<String, String>>[];
+    if (kIsWeb) return encoded;
+    for (final path in attachmentPaths) {
+      final file = File(path);
+      if (!await file.exists()) continue;
+      encoded.add({
+        'filename': path.split('/').last,
+        'content': base64Encode(await file.readAsBytes()),
+      });
+    }
+    return encoded;
+  }
+
+  static void _ensureSuccess(http.Response response) {
+    if (response.statusCode >= 400) {
+      final body = response.body.isEmpty ? '{}' : response.body;
+      throw Exception('Request failed (${response.statusCode}): $body');
+    }
+  }
+
+  static dynamic _decode(http.Response response) {
+    final body = response.body.isEmpty ? '{}' : response.body;
+    final decoded = jsonDecode(body);
+    if (response.statusCode == 401) {
+      throw UnauthorizedRequestException(
+        'Request failed (401): $decoded',
+      );
+    }
+    if (response.statusCode >= 400) {
+      throw Exception('Request failed (${response.statusCode}): $decoded');
+    }
+    return decoded;
+  }
+}

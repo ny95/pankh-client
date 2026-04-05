@@ -55,6 +55,17 @@ EmailServerInfo serverInfoFromEmail(String email) {
     );
   }
 
+  if (domain == 'neosoftmail.com') {
+    return const EmailServerInfo(
+      imapHost: 'mail.neosoftmail.com',
+      imapPort: 993,
+      imapSecure: true,
+      smtpHost: 'mail.neosoftmail.com',
+      smtpPort: 465,
+      smtpSecure: true,
+    );
+  }
+
   if (domain.isEmpty) {
     return const EmailServerInfo(
       imapHost: '',

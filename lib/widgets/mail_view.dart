@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:projectwebview/providers/common_provider.dart';
-import 'package:projectwebview/providers/layout_provider.dart';
-import 'package:projectwebview/providers/mail_provider.dart';
-import 'package:projectwebview/providers/theme_provider.dart';
-import 'package:projectwebview/utils/helpers.dart';
-import 'package:projectwebview/widgets/blur.dart';
+import 'package:pankh/providers/common_provider.dart';
+import 'package:pankh/providers/layout_provider.dart';
+import 'package:pankh/providers/mail_provider.dart';
+import 'package:pankh/providers/theme_provider.dart';
+import 'package:pankh/utils/helpers.dart';
+import 'package:pankh/widgets/blur.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 

@@ -14,17 +14,238 @@ class ImapPageResult {
 }
 
 class ImapService {
+  EmailServerInfo _resolveServer(
+    String email, {
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
+  }) {
+    final base = serverInfoFromEmail(email);
+    return EmailServerInfo(
+      imapHost: imapHost ?? base.imapHost,
+      imapPort: imapPort ?? base.imapPort,
+      imapSecure: imapSecure ?? base.imapSecure,
+      smtpHost: base.smtpHost,
+      smtpPort: base.smtpPort,
+      smtpSecure: base.smtpSecure,
+    );
+  }
+
+
+  Future<void> _authenticate(
+    ImapClient client, {
+    required String email,
+    required String password,
+    String? oauthAccessToken,
+  }) async {
+    if (oauthAccessToken != null && oauthAccessToken.isNotEmpty) {
+      await client.authenticateWithOAuth2(email, oauthAccessToken);
+      return;
+    }
+    await client.login(email, password);
+  }
+
+  Future<bool> appendDraft({
+    required String email,
+    required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
+    required String mailboxPath,
+    required String from,
+    required String to,
+    required String cc,
+    required String bcc,
+    required String subject,
+    required String body,
+    required String messageId,
+  }) async {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
+    final imapServerHost = serverInfo.imapHost;
+    final client = ImapClient(
+      isLogEnabled: kDebugMode,
+      // onBadCertificate: (certificate) => true,
+    );
+
+    var connected = false;
+    try {
+      if (imapServerHost.isEmpty) return false;
+      await client.connectToServer(
+        imapServerHost,
+        serverInfo.imapPort,
+        isSecure: serverInfo.imapSecure,
+      );
+      connected = true;
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
+
+      final builder = MessageBuilder()
+        ..from = [_safeAddress(from)]
+        ..to = _parseAddresses(to)
+        ..cc = _parseAddresses(cc)
+        ..bcc = _parseAddresses(bcc)
+        ..subject = subject
+        ..text = body
+        ..messageId = messageId
+        ..date = DateTime.now();
+
+      final message = builder.buildMimeMessage();
+      await client.appendMessage(
+        message,
+        flags: const ['\\Draft'],
+        targetMailboxPath: mailboxPath,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      if (connected) {
+        try {
+          await client.logout();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<bool> testConnection({
+    required String email,
+    required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
+  }) async {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
+    final client = ImapClient(
+      isLogEnabled: kDebugMode,
+      onBadCertificate: (certificate) => true,
+    );
+    var connected = false;
+    try {
+      if (serverInfo.imapHost.isEmpty) return false;
+      await client.connectToServer(
+        serverInfo.imapHost,
+        serverInfo.imapPort,
+        isSecure: serverInfo.imapSecure,
+      );
+      connected = true;
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      if (connected) {
+        try {
+          await client.logout();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<bool> deleteByMessageId({
+    required String email,
+    required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
+    required String mailboxPath,
+    required String messageId,
+  }) async {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
+    final imapServerHost = serverInfo.imapHost;
+    final client = ImapClient(
+      isLogEnabled: kDebugMode,
+      onBadCertificate: (certificate) => true,
+    );
+
+    var connected = false;
+    try {
+      if (imapServerHost.isEmpty) return false;
+      await client.connectToServer(
+        imapServerHost,
+        serverInfo.imapPort,
+        isSecure: serverInfo.imapSecure,
+      );
+      connected = true;
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
+      await client.selectMailboxByPath(mailboxPath);
+      final result = await client.searchMessages(
+        searchCriteria: 'HEADER Message-ID "$messageId"',
+      );
+      final sequence = result.matchingSequence;
+      if (sequence == null || sequence.isEmpty) return false;
+      await client.store(
+        sequence,
+        const ['\\Deleted'],
+        action: StoreAction.add,
+        silent: true,
+      );
+      await client.expunge();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      if (connected) {
+        try {
+          await client.logout();
+        } catch (_) {}
+      }
+    }
+  }
   Future<ImapPageResult> searchMessages({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String searchCriteria,
     String mailboxPath = 'INBOX',
     int pageSize = 20,
   }) async {
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) {
       return const ImapPageResult(messages: [], mailboxMessages: 0);
     }
-    final serverInfo = serverInfoFromEmail(email);
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -42,7 +263,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       final mailbox = await client.selectMailboxByPath(mailboxPath);
       final total = mailbox.messagesExists;
       final result = await client.searchMessages(
@@ -85,12 +311,21 @@ class ImapService {
   Future<bool> toggleFlagged({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required MimeMessage message,
     required bool add,
   }) async {
-    if (email.isEmpty || password.isEmpty) return false;
-    final serverInfo = serverInfoFromEmail(email);
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -106,7 +341,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       await client.selectMailboxByPath(mailboxPath);
 
       if (message.uid != null) {
@@ -142,6 +382,10 @@ class ImapService {
   Future<bool> setFlagged({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required List<MimeMessage> messages,
     required bool add,
@@ -149,6 +393,10 @@ class ImapService {
     return _storeFlags(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       mailboxPath: mailboxPath,
       messages: messages,
       flags: const ['\\Flagged'],
@@ -159,6 +407,10 @@ class ImapService {
   Future<bool> setSeen({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required List<MimeMessage> messages,
     required bool seen,
@@ -166,6 +418,10 @@ class ImapService {
     return _storeFlags(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       mailboxPath: mailboxPath,
       messages: messages,
       flags: const ['\\Seen'],
@@ -176,6 +432,10 @@ class ImapService {
   Future<bool> moveMessages({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required String targetPath,
     required List<MimeMessage> messages,
@@ -183,6 +443,10 @@ class ImapService {
     return _copyOrMove(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       mailboxPath: mailboxPath,
       targetPath: targetPath,
       messages: messages,
@@ -193,6 +457,10 @@ class ImapService {
   Future<bool> copyMessages({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required String targetPath,
     required List<MimeMessage> messages,
@@ -200,6 +468,10 @@ class ImapService {
     return _copyOrMove(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       mailboxPath: mailboxPath,
       targetPath: targetPath,
       messages: messages,
@@ -210,11 +482,20 @@ class ImapService {
   Future<bool> deleteMessages({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required List<MimeMessage> messages,
   }) async {
-    if (email.isEmpty || password.isEmpty) return false;
-    final serverInfo = serverInfoFromEmail(email);
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -230,7 +511,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       await client.selectMailboxByPath(mailboxPath);
 
       final usedUid = _allHaveUid(messages);
@@ -270,14 +556,23 @@ class ImapService {
   Future<bool> _storeFlags({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required List<MimeMessage> messages,
     required List<String> flags,
     required StoreAction action,
   }) async {
-    if (email.isEmpty || password.isEmpty) return false;
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
     if (messages.isEmpty) return false;
-    final serverInfo = serverInfoFromEmail(email);
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -293,7 +588,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       await client.selectMailboxByPath(mailboxPath);
 
       final usedUid = _allHaveUid(messages);
@@ -329,14 +629,23 @@ class ImapService {
   Future<bool> _copyOrMove({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required String mailboxPath,
     required String targetPath,
     required List<MimeMessage> messages,
     required bool move,
   }) async {
-    if (email.isEmpty || password.isEmpty) return false;
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) return false;
     if (messages.isEmpty) return false;
-    final serverInfo = serverInfoFromEmail(email);
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -352,7 +661,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       await client.selectMailboxByPath(mailboxPath);
 
       final usedUid = _allHaveUid(messages);
@@ -430,6 +744,30 @@ class ImapService {
     return messages.every((m) => m.uid != null);
   }
 
+  MailAddress _safeAddress(String raw) {
+    try {
+      return MailAddress.parse(raw);
+    } catch (_) {
+      return MailAddress(null, raw);
+    }
+  }
+
+  List<MailAddress> _parseAddresses(String raw) {
+    if (raw.trim().isEmpty) return <MailAddress>[];
+    final parts = raw.split(RegExp(r'[;,]'));
+    final parsed = <MailAddress>[];
+    for (final part in parts) {
+      final value = part.trim();
+      if (value.isEmpty) continue;
+      try {
+        parsed.add(MailAddress.parse(value));
+      } catch (_) {
+        parsed.add(MailAddress(null, value));
+      }
+    }
+    return parsed;
+  }
+
   List<int> _collectIds(List<MimeMessage> messages, {required bool useUid}) {
     return messages
         .map((m) => useUid ? m.uid : m.sequenceId)
@@ -440,11 +778,20 @@ class ImapService {
   Future<List<Mailbox>> listMailboxes({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
   }) async {
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) {
       return [];
     }
-    final serverInfo = serverInfoFromEmail(email);
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -460,7 +807,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       final mailboxes = await client.listMailboxes(recursive: true);
       return mailboxes
           .where((m) => !m.flags.contains(MailboxFlag.noSelect))
@@ -479,12 +831,20 @@ class ImapService {
   Future<ImapPageResult> fetchLatest({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     int pageSize = 20,
     String mailboxPath = 'INBOX',
   }) async {
     return _fetchRange(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       rangeEnd: null,
       pageSize: pageSize,
       mailboxPath: mailboxPath,
@@ -494,6 +854,10 @@ class ImapService {
   Future<ImapPageResult> fetchOlder({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required int rangeEnd,
     int pageSize = 20,
     String mailboxPath = 'INBOX',
@@ -501,6 +865,10 @@ class ImapService {
     return _fetchRange(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       rangeEnd: rangeEnd,
       pageSize: pageSize,
       mailboxPath: mailboxPath,
@@ -510,12 +878,20 @@ class ImapService {
   Future<ImapPageResult> fetchNewer({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     required int rangeStart,
     String mailboxPath = 'INBOX',
   }) async {
     return _fetchRange(
       email: email,
       password: password,
+      oauthAccessToken: oauthAccessToken,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
       rangeStart: rangeStart,
       mailboxPath: mailboxPath,
     );
@@ -524,17 +900,26 @@ class ImapService {
   Future<ImapPageResult> _fetchRange({
     required String email,
     required String password,
+    String? oauthAccessToken,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
     int? rangeStart,
     int? rangeEnd,
     int pageSize = 20,
     String mailboxPath = 'INBOX',
   }) async {
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || (password.isEmpty && (oauthAccessToken == null || oauthAccessToken.isEmpty))) {
       debugPrint('IMAP credentials missing.');
       return const ImapPageResult(messages: [], mailboxMessages: 0);
     }
 
-    final serverInfo = serverInfoFromEmail(email);
+    final serverInfo = _resolveServer(
+      email,
+      imapHost: imapHost,
+      imapPort: imapPort,
+      imapSecure: imapSecure,
+    );
     final imapServerHost = serverInfo.imapHost;
     final client = ImapClient(
       isLogEnabled: kDebugMode,
@@ -552,7 +937,12 @@ class ImapService {
         isSecure: serverInfo.imapSecure,
       );
       connected = true;
-      await client.login(email, password);
+      await _authenticate(
+        client,
+        email: email,
+        password: password,
+        oauthAccessToken: oauthAccessToken,
+      );
       final mailbox = await client.selectMailboxByPath(mailboxPath);
       final total = mailbox.messagesExists;
       if (total == 0) {

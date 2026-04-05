@@ -63,11 +63,19 @@ class SideMenuList extends StatelessWidget {
     required this.width,
     required this.height,
     this.hidden = false,
+    this.onCompose,
+    this.onOpenSettings,
+    this.onOpenHelp,
+    this.closeDrawerOnTap = false,
   });
 
   final double width;
   final double height;
   final bool hidden;
+  final VoidCallback? onCompose;
+  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenHelp;
+  final bool closeDrawerOnTap;
   Widget getSideMenuList({
     required BuildContext context,
     required double width,
@@ -79,7 +87,12 @@ class SideMenuList extends StatelessWidget {
     VoidCallback? onTap,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        if (closeDrawerOnTap && isSmallScreen) {
+          Navigator.of(context).pop();
+        }
+        onTap?.call();
+      },
       child: Container(
         height: 50,
         padding: EdgeInsets.symmetric(
@@ -203,12 +216,7 @@ class SideMenuList extends StatelessWidget {
                   ),
                 ),
                 onPressed: () {
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(
-                  //     builder: (context) => const ComposeEmail(),
-                  //   ),
-                  // );
+                  onCompose?.call();
                 },
                 child: Center(
                   child: Row(
@@ -258,31 +266,25 @@ class SideMenuList extends StatelessWidget {
               children: [
                 if (isSmallScreen)
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: Container(
-                          width: width,
-                          height: 50,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 15,
+                      SizedBox(
+                        height: 75,
+                        width: 90,
+                        child: Center(
+                          child: Image.asset(
+                            'assets/logos/pankh-2d.png',
+                            // width: 75,
+                            height: 44,
                           ),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white30),
-                            ),
-                          ),
-                          child: const Text('Wings'),
                         ),
                       ),
+                      Image.asset(
+                        'assets/logos/pankh-text.png',
+                        // width: 75,
+                        height: 25,
+                      )
                     ],
-                  ),
-                if (folders.isEmpty)
-                  getSideMenuList(
-                    context: context,
-                    width: width,
-                    isSmallScreen: isSmallScreen,
-                    label: 'Loading folders…',
                   ),
                 if (folders.isNotEmpty)
                   ...folders.map((folder) {
@@ -313,7 +315,8 @@ class SideMenuList extends StatelessWidget {
                   isSmallScreen: isSmallScreen,
                   icon: Icons.settings_rounded,
                   label: 'Settings',
-                  badge: '5',
+                  // badge: '5',
+                  onTap: onOpenSettings,
                 ),
                 getSideMenuList(
                   context: context,
@@ -321,8 +324,9 @@ class SideMenuList extends StatelessWidget {
                   isSmallScreen: isSmallScreen,
                   icon: Icons.help_outline_outlined,
                   label: 'Help & Feedback',
-                  badge: '5',
+                  // badge: '5',
                   border: true,
+                  onTap: onOpenHelp,
                 ),
               ],
             ),
