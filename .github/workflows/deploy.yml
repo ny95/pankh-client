@@ -1,70 +1,70 @@
 name: Deploy Flutter Web (Client)
 
 on:
-push:
-branches:
-- main
+  push:
+    branches:
+      - main
 
 jobs:
-build-and-deploy:
-runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-steps:
-  - name: Checkout code
-    uses: actions/checkout@v5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-  - name: Setup Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      flutter-version: '3.22.0'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
 
-  - name: Install dependencies
-    run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-  - name: Build Flutter Web
-    run: |
-      flutter build web \
-        --release \
-        --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
+      - name: Build Flutter Web
+        run: |
+          flutter build web \
+            --release \
+            --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
 
-  - name: Prepare server directory
-    uses: appleboy/ssh-action@v1.0.3
-    with:
-      host: ${{ secrets.SSH_HOST }}
-      username: ${{ secrets.SSH_USER }}
-      key: ${{ secrets.SSH_KEY }}
-      script: |
-        sudo rm -rf /var/www/pankh/*
-        sudo mkdir -p /var/www/pankh
+      - name: Prepare server directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo rm -rf /var/www/pankh/*
+            sudo mkdir -p /var/www/pankh
 
-  - name: Copy build files
-    uses: appleboy/scp-action@v0.1.7
-    with:
-      host: ${{ secrets.SSH_HOST }}
-      username: ${{ secrets.SSH_USER }}
-      key: ${{ secrets.SSH_KEY }}
-      source: "build/web/*"
-      target: "/var/www/pankh"
+      - name: Copy build files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "build/web/*"
+          target: "/var/www/pankh"
 
-  - name: Fix permissions
-    uses: appleboy/ssh-action@v1.0.3
-    with:
-      host: ${{ secrets.SSH_HOST }}
-      username: ${{ secrets.SSH_USER }}
-      key: ${{ secrets.SSH_KEY }}
-      script: |
-        sudo chown -R www-data:www-data /var/www/pankh
-        sudo chmod -R 755 /var/www/pankh
+      - name: Fix permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo chown -R www-data:www-data /var/www/pankh
+            sudo chmod -R 755 /var/www/pankh
 
-  - name: Reload Nginx
-    uses: appleboy/ssh-action@v1.0.3
-    with:
-      host: ${{ secrets.SSH_HOST }}
-      username: ${{ secrets.SSH_USER }}
-      key: ${{ secrets.SSH_KEY }}
-      script: |
-        sudo nginx -t
-        sudo systemctl reload nginx
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo nginx -t
+            sudo systemctl reload nginx
