@@ -283,7 +283,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             _buildDropdownField(
               'Authentication method:',
               account.authMethod,
-              ['Normal password', 'OAuth2', 'Kerberos'],
+              _authOptionsFor(account.authMethod),
               (value) {
                 if (value == null) return;
                 context.read<AuthProvider>().updateAccount(
@@ -714,7 +714,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
                       _buildDialogDropdown(
                         'Authentication method',
                         authMethod,
-                        ['Normal password', 'OAuth2', 'Kerberos'],
+                        _authOptionsFor(authMethod),
                         (value) {
                           if (value == null) return;
                           setDialogState(() {
@@ -1991,3 +1991,19 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     );
   }
 }
+const List<String> _authMethodOptions = [
+  'No Authentication',
+  'Normal password',
+  'Encrypted password',
+  'Kerberos / GSSAPI',
+  'NTLM',
+  'TLS Certificate',
+  'OAuth2',
+  'Exchange / OAuth2',
+];
+
+  List<String> _authOptionsFor(String current) {
+    return _authMethodOptions.contains(current)
+        ? _authMethodOptions
+        : [..._authMethodOptions, current];
+  }

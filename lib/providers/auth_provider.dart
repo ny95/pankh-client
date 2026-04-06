@@ -35,7 +35,8 @@ class AuthProvider with ChangeNotifier {
           ? null
           : accountForEmail(_defaultOutgoingEmail!);
   bool get isOAuthAccount =>
-      (activeAccount?.authMethod.toLowerCase() ?? '') == 'oauth';
+      (activeAccount?.oauthProvider?.isNotEmpty ?? false) &&
+      (activeAccount?.serverSessionToken?.isNotEmpty ?? false);
   String? get oauthProvider => activeAccount?.oauthProvider;
   String? get serverSessionToken => activeAccount?.serverSessionToken;
 
@@ -60,6 +61,15 @@ class AuthProvider with ChangeNotifier {
   Future<void> login({
     required String email,
     required String password,
+    String? displayName,
+    String? imapHost,
+    int? imapPort,
+    bool? imapSecure,
+    String? smtpHost,
+    int? smtpPort,
+    bool? smtpSecure,
+    String? authMethod,
+    String? smtpAuthMethod,
   }) async {
     final normalizedEmail = email.trim();
     final existingIndex =
@@ -68,13 +78,39 @@ class AuthProvider with ChangeNotifier {
       final existing = _accounts[existingIndex];
       _accounts[existingIndex] = existing.copyWith(
         password: password,
-        authMethod: 'Normal password',
+        displayName: (displayName ?? existing.displayName).trim(),
+        accountName: normalizedEmail,
+        smtpUserName: normalizedEmail,
+        imapHost: imapHost ?? existing.imapHost,
+        imapPort: imapPort ?? existing.imapPort,
+        imapSecure: imapSecure ?? existing.imapSecure,
+        smtpHost: smtpHost ?? existing.smtpHost,
+        smtpPort: smtpPort ?? existing.smtpPort,
+        smtpSecure: smtpSecure ?? existing.smtpSecure,
+        authMethod: authMethod ?? 'Normal password',
+        smtpAuthMethod: smtpAuthMethod ?? existing.smtpAuthMethod,
         oauthProvider: null,
         serverSessionToken: null,
       );
     } else {
+      final base = Account.initialForEmail(
+        email: normalizedEmail,
+        password: password,
+      );
       _accounts.add(
-        Account.initialForEmail(email: normalizedEmail, password: password),
+        base.copyWith(
+          displayName: (displayName ?? base.displayName).trim(),
+          accountName: normalizedEmail,
+          smtpUserName: normalizedEmail,
+          imapHost: imapHost ?? base.imapHost,
+          imapPort: imapPort ?? base.imapPort,
+          imapSecure: imapSecure ?? base.imapSecure,
+          smtpHost: smtpHost ?? base.smtpHost,
+          smtpPort: smtpPort ?? base.smtpPort,
+          smtpSecure: smtpSecure ?? base.smtpSecure,
+          authMethod: authMethod ?? base.authMethod,
+          smtpAuthMethod: smtpAuthMethod ?? base.smtpAuthMethod,
+        ),
       );
     }
     _activeEmail = normalizedEmail;
@@ -89,6 +125,7 @@ class AuthProvider with ChangeNotifier {
     required String email,
     required String provider,
     required String sessionToken,
+    String authMethod = 'OAuth2',
   }) async {
     final normalizedEmail = email.trim();
     final existingIndex =
@@ -96,7 +133,8 @@ class AuthProvider with ChangeNotifier {
     final base = Account.initialForEmail(email: normalizedEmail, password: '');
     final updated = (existingIndex >= 0 ? _accounts[existingIndex] : base).copyWith(
       password: '',
-      authMethod: 'OAuth',
+      authMethod: authMethod,
+      smtpAuthMethod: authMethod,
       oauthProvider: provider,
       serverSessionToken: sessionToken,
       smtpUserName: normalizedEmail,

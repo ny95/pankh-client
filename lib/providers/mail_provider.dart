@@ -54,7 +54,7 @@ class MailProvider with ChangeNotifier {
       kIsWeb && (_serverSessionToken?.isNotEmpty ?? false);
   bool get _usesOauthImap =>
       !kIsWeb &&
-      (_authMethod?.toLowerCase() == 'oauth') &&
+      (_oauthProvider?.isNotEmpty ?? false) &&
       (_oauthProvider?.isNotEmpty ?? false) &&
       (_serverSessionToken?.isNotEmpty ?? false);
   bool get _canUseImap =>

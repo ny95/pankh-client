@@ -18,6 +18,77 @@ class BackendMailPage {
   final String? nextCursor;
 }
 
+class EmailServerSettings {
+  const EmailServerSettings({
+    required this.host,
+    required this.port,
+    required this.secure,
+    required this.authMethod,
+    required this.usernamePattern,
+  });
+
+  final String host;
+  final int port;
+  final bool secure;
+  final String authMethod;
+  final String usernamePattern;
+
+  factory EmailServerSettings.fromJson(Map<String, dynamic> json) {
+    return EmailServerSettings(
+      host: json['host'] as String? ?? '',
+      port: json['port'] as int? ?? 0,
+      secure: json['secure'] as bool? ?? true,
+      authMethod: json['authMethod'] as String? ?? 'password-cleartext',
+      usernamePattern: json['usernamePattern'] as String? ?? '%EMAILADDRESS%',
+    );
+  }
+}
+
+class EmailServerLookupResult {
+  const EmailServerLookupResult({
+    required this.found,
+    required this.domain,
+    this.source,
+    this.hostedAuthAvailable = false,
+    this.hostedAuthProvider,
+    this.imap,
+    this.smtp,
+  });
+
+  final bool found;
+  final String domain;
+  final String? source;
+  final bool hostedAuthAvailable;
+  final String? hostedAuthProvider;
+  final EmailServerSettings? imap;
+  final EmailServerSettings? smtp;
+
+  factory EmailServerLookupResult.fromJson(Map<String, dynamic> json) {
+    final config = json['config'];
+    final hostedAuth = json['hostedAuth'];
+    final configMap = config is Map<String, dynamic> ? config : <String, dynamic>{};
+    final hostedAuthMap =
+        hostedAuth is Map<String, dynamic> ? hostedAuth : <String, dynamic>{};
+    final imap = configMap['imap'];
+    final smtp = configMap['smtp'];
+    return EmailServerLookupResult(
+      found: json['found'] as bool? ?? false,
+      domain: json['domain'] as String? ?? '',
+      source: json['source'] as String?,
+      hostedAuthAvailable: hostedAuthMap['available'] as bool? ?? false,
+      hostedAuthProvider: hostedAuthMap['provider'] as String?,
+      imap:
+          imap is Map<String, dynamic>
+              ? EmailServerSettings.fromJson(imap)
+              : null,
+      smtp:
+          smtp is Map<String, dynamic>
+              ? EmailServerSettings.fromJson(smtp)
+              : null,
+    );
+  }
+}
+
 
 class UnauthorizedRequestException implements Exception {
   const UnauthorizedRequestException(this.message);
@@ -37,12 +108,62 @@ class BackendApiService {
   static String get baseUrl => _defaultBaseUrl;
 
   static Future<String> fetchGoogleAuthUrl({required String redirectUri}) async {
-    final uri = Uri.parse('$baseUrl/auth/google').replace(
+    return fetchProviderAuthUrl(
+      provider: 'google',
+      redirectUri: redirectUri,
+    );
+  }
+
+  static Future<String> fetchProviderAuthUrl({
+    required String provider,
+    required String redirectUri,
+  }) async {
+    final uri = Uri.parse('$baseUrl/auth/$provider').replace(
       queryParameters: {'redirectUri': redirectUri},
     );
     final response = await http.get(uri);
     final json = _decode(response);
     return json['authUrl'] as String;
+  }
+
+  static Future<EmailServerLookupResult> lookupEmailConfig({
+    required String email,
+  }) async {
+    final uri = Uri.parse('$baseUrl/auth/email-config/lookup').replace(
+      queryParameters: {'email': email},
+    );
+    final response = await http.get(uri);
+    final json = _decode(response) as Map<String, dynamic>;
+    return EmailServerLookupResult.fromJson(json);
+  }
+
+  static Future<void> cacheEmailConfig({
+    required String email,
+    required String imapHost,
+    required int imapPort,
+    required bool imapSecure,
+    String? imapAuthMethod,
+    String? smtpHost,
+    int? smtpPort,
+    bool? smtpSecure,
+    String? smtpAuthMethod,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email-config/cache'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'imapHost': imapHost,
+        'imapPort': imapPort,
+        'imapSecure': imapSecure,
+        if ((imapAuthMethod ?? '').isNotEmpty) 'imapAuthMethod': imapAuthMethod,
+        if ((smtpHost ?? '').isNotEmpty) 'smtpHost': smtpHost,
+        if (smtpPort != null) 'smtpPort': smtpPort,
+        if (smtpSecure != null) 'smtpSecure': smtpSecure,
+        if ((smtpAuthMethod ?? '').isNotEmpty) 'smtpAuthMethod': smtpAuthMethod,
+      }),
+    );
+    _ensureSuccess(response);
   }
 
   static Future<String> fetchBrokeredAccessToken({
