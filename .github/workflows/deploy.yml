@@ -115,4 +115,4 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            ls -dt /var/www/pankh/releases/* | tail -n +6 | xargs rm -rf
+            sudo ls -dt /var/www/pankh/releases/* | tail -n +6 | xargs -r sudo rm -rf
