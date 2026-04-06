@@ -1,4 +1,4 @@
-name: Deploy Flutter Web (Client)
+name: Deploy to Oracle VM (Zero Downtime + Rollback)
 
 on:
   push:
@@ -6,127 +6,82 @@ on:
       - main
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  APP_DIR: /var/www/pankh
+  RELEASES_DIR: /var/www/pankh/releases
+  CURRENT_LINK: /var/www/pankh/current
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
 
-      # 2️⃣ Setup Flutter
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      # 3️⃣ Disable analytics
-      - run: flutter config --no-analytics
-
-      # 4️⃣ Cache pub
-      - uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      # 5️⃣ Install deps
-      - run: flutter pub get
-
-      # 6️⃣ Build
-      - name: Build Flutter Web
+      - name: 📦 Create deployment archive
         run: |
-          flutter build web \
-            --release \
-            --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
+          tar -czf app.tar.gz .
 
-      # 7️⃣ Generate release ID (CORRECT PLACE)
-      - name: Generate release ID
-        run: echo "RELEASE=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
-
-      # 8️⃣ Prepare release folder
-      - name: Prepare release folder
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            sudo mkdir -p /var/www/pankh/releases/${{ env.RELEASE }}
-
-      # 9️⃣ Upload build
-      - name: Upload build files
+      - name: 🚀 Copy files to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "build/web/*"
-          target: "/var/www/pankh/releases/${{ env.RELEASE }}"
-          strip_components: 2
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "app.tar.gz"
+          target: "/tmp"
 
-      # 🔟 Activate release (safe switch)
-      - name: Activate release
+      - name: ⚙️ Deploy with zero downtime + rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            RELEASE=/var/www/pankh/releases/${{ env.RELEASE }}
+            set -e
 
-            # Validate build
-            if [ ! -f "$RELEASE/index.html" ]; then
-              echo "❌ index.html missing, aborting"
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            NEW_RELEASE=$RELEASES_DIR/$TIMESTAMP
+            PREVIOUS_RELEASE=$(readlink -f $CURRENT_LINK || echo "")
+
+            echo "📁 Creating new release: $NEW_RELEASE"
+            sudo mkdir -p $NEW_RELEASE
+
+            echo "📦 Extracting files"
+            sudo tar -xzf /tmp/app.tar.gz -C $NEW_RELEASE
+
+            echo "🔐 Setting permissions"
+            sudo chown -R www-data:www-data $NEW_RELEASE
+
+            echo "🔗 Switching symlink (zero downtime)"
+            sudo ln -sfn $NEW_RELEASE $CURRENT_LINK
+
+            echo "🔁 Reloading NGINX"
+            sudo systemctl reload nginx
+
+            echo "⏳ Waiting for app to be ready..."
+            sleep 3
+
+            echo "🩺 Running health check"
+            if ! curl -f http://localhost > /dev/null; then
+              echo "❌ Health check failed! Rolling back..."
+
+              if [ -n "$PREVIOUS_RELEASE" ]; then
+                sudo ln -sfn $PREVIOUS_RELEASE $CURRENT_LINK
+                sudo systemctl reload nginx
+                echo "✅ Rolled back to previous release"
+              else
+                echo "⚠️ No previous release found"
+              fi
+
               exit 1
             fi
 
-            # Save previous
-            PREVIOUS=$(readlink -f /var/www/pankh/current || echo "")
+            echo "🧹 Cleaning up old releases (keeping last 5)"
+            cd $RELEASES_DIR
+            ls -dt */ | tail -n +6 | xargs -r sudo rm -rf
 
-            # Switch (atomic)
-            sudo ln -sfn $RELEASE /var/www/pankh/current
+            echo "🗑 Removing temp archive"
+            rm -f /tmp/app.tar.gz
 
-            # Permissions
-            sudo chown -R www-data:www-data /var/www/pankh
-            sudo chmod -R 755 /var/www/pankh
-
-            # Reload nginx
-            sudo nginx -t
-            sudo systemctl reload nginx
-
-            # Save previous for rollback (temp file)
-            echo $PREVIOUS > /tmp/pankh_previous_release
-
-      # 🔁 Rollback on failure
-      - name: Rollback on failure
-        if: failure()
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            if [ -f /tmp/pankh_previous_release ]; then
-              PREVIOUS=$(cat /tmp/pankh_previous_release)
-              sudo ln -sfn $PREVIOUS /var/www/pankh/current
-              sudo systemctl reload nginx
-              echo "✅ Rollback done"
-            else
-              echo "⚠️ No previous release found"
-            fi
-
-      # 🧹 Cleanup (safe)
-      - name: Cleanup old releases
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            sudo ls -dt /var/www/pankh/releases/* | tail -n +6 | xargs -r sudo rm -rf
+            echo "✅ Deployment successful!"
