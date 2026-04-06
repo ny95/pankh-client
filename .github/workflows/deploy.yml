@@ -48,6 +48,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           source: "build/web/*"
           target: "/var/www/pankh"
+          strip_components: 2
 
       - name: Fix permissions
         uses: appleboy/ssh-action@v1.0.3
