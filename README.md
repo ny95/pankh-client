@@ -181,4 +181,4 @@ flutter run -d chrome
 
 ---
 
-Built with ❤️ for pankh.email
+Built with ❤️ for pankh.email.
