@@ -14,29 +14,24 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 steps:
-  # 1️⃣ Checkout repo
   - name: Checkout code
     uses: actions/checkout@v5
 
-  # 2️⃣ Setup Flutter
   - name: Setup Flutter
     uses: subosito/flutter-action@v2
     with:
-      flutter-version: '3.22.0'   # keep this same as your local
+      flutter-version: '3.22.0'
 
-  # 3️⃣ Install dependencies
   - name: Install dependencies
     run: flutter pub get
 
-  # 4️⃣ Build Flutter Web
   - name: Build Flutter Web
     run: |
       flutter build web \
         --release \
         --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
 
-  # 5️⃣ Deploy to Server (Nginx root)
-  - name: Deploy to Server
+  - name: Prepare server directory
     uses: appleboy/ssh-action@v1.0.3
     with:
       host: ${{ secrets.SSH_HOST }}
@@ -46,7 +41,6 @@ steps:
         sudo rm -rf /var/www/pankh/*
         sudo mkdir -p /var/www/pankh
 
-  # 6️⃣ Copy build files using SCP
   - name: Copy build files
     uses: appleboy/scp-action@v0.1.7
     with:
@@ -56,7 +50,6 @@ steps:
       source: "build/web/*"
       target: "/var/www/pankh"
 
-  # 7️⃣ Fix permissions
   - name: Fix permissions
     uses: appleboy/ssh-action@v1.0.3
     with:
@@ -67,7 +60,6 @@ steps:
         sudo chown -R www-data:www-data /var/www/pankh
         sudo chmod -R 755 /var/www/pankh
 
-  # 8️⃣ Reload Nginx
   - name: Reload Nginx
     uses: appleboy/ssh-action@v1.0.3
     with:
