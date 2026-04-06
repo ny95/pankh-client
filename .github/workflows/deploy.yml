@@ -1,4 +1,4 @@
-name: Deploy to Oracle VM (Zero Downtime + Rollback)
+name: Deploy Flutter Web (Client)
 
 on:
   push:
@@ -6,82 +6,116 @@ on:
       - main
 
 env:
-  APP_DIR: /var/www/pankh
-  RELEASES_DIR: /var/www/pankh/releases
-  CURRENT_LINK: /var/www/pankh/current
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
+      # 1️⃣ Checkout
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: 📦 Create deployment archive
-        run: |
-          tar -czf app.tar.gz .
-
-      - name: 🚀 Copy files to server
-        uses: appleboy/scp-action@v0.1.7
+      # 2️⃣ Setup Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "app.tar.gz"
-          target: "/tmp"
+          channel: stable
+          cache: true
 
-      - name: ⚙️ Deploy with zero downtime + rollback
+      # 3️⃣ Disable analytics
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
+
+      # 4️⃣ Cache dependencies
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      # 5️⃣ Install deps
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 6️⃣ Build Flutter Web
+      - name: Build Flutter Web
+        run: |
+          flutter build web \
+            --release \
+            --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
+
+      # 7️⃣ Create release folder + fix permissions
+      - name: Prepare release folder
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
-            set -e
+            RELEASE=$(date +%Y%m%d%H%M%S)
+            echo "RELEASE=$RELEASE" >> $GITHUB_ENV
 
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            NEW_RELEASE=$RELEASES_DIR/$TIMESTAMP
-            PREVIOUS_RELEASE=$(readlink -f $CURRENT_LINK || echo "")
+            sudo mkdir -p /var/www/pankh/releases/$RELEASE
+            sudo chown -R $USER:$USER /var/www/pankh
 
-            echo "📁 Creating new release: $NEW_RELEASE"
-            sudo mkdir -p $NEW_RELEASE
+      # 8️⃣ Upload ONLY build/web (NO TAR, NO BUGS)
+      - name: Upload build files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "build/web/*"
+          target: "/var/www/pankh/releases/${{ env.RELEASE }}"
+          strip_components: 2
 
-            echo "📦 Extracting files"
-            sudo tar -xzf /tmp/app.tar.gz -C $NEW_RELEASE
+      # 9️⃣ Activate release (zero downtime)
+      - name: Activate release
+        id: deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            PREVIOUS=$(readlink -f /var/www/pankh/current || echo "")
+            echo "PREVIOUS=$PREVIOUS" >> $GITHUB_ENV
 
-            echo "🔐 Setting permissions"
-            sudo chown -R www-data:www-data $NEW_RELEASE
+            ln -sfn /var/www/pankh/releases/${{ env.RELEASE }} /var/www/pankh/current
 
-            echo "🔗 Switching symlink (zero downtime)"
-            sudo ln -sfn $NEW_RELEASE $CURRENT_LINK
+            sudo chown -R www-data:www-data /var/www/pankh
+            sudo chmod -R 755 /var/www/pankh
 
-            echo "🔁 Reloading NGINX"
+            sudo nginx -t
             sudo systemctl reload nginx
 
-            echo "⏳ Waiting for app to be ready..."
-            sleep 3
-
-            echo "🩺 Running health check"
-            if ! curl -f http://localhost > /dev/null; then
-              echo "❌ Health check failed! Rolling back..."
-
-              if [ -n "$PREVIOUS_RELEASE" ]; then
-                sudo ln -sfn $PREVIOUS_RELEASE $CURRENT_LINK
-                sudo systemctl reload nginx
-                echo "✅ Rolled back to previous release"
-              else
-                echo "⚠️ No previous release found"
-              fi
-
-              exit 1
+      # 🔁 Rollback if ANYTHING fails after activation
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            if [ -n "${{ env.PREVIOUS }}" ]; then
+              ln -sfn ${{ env.PREVIOUS }} /var/www/pankh/current
+              sudo systemctl reload nginx
+              echo "Rollback done"
+            else
+              echo "No previous release found"
             fi
 
-            echo "🧹 Cleaning up old releases (keeping last 5)"
-            cd $RELEASES_DIR
-            ls -dt */ | tail -n +6 | xargs -r sudo rm -rf
-
-            echo "🗑 Removing temp archive"
-            rm -f /tmp/app.tar.gz
-
-            echo "✅ Deployment successful!"
+      # 🧹 Cleanup old releases (keep last 5)
+      - name: Cleanup old releases
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo ls -dt /var/www/pankh/releases/* | tail -n +6 | xargs -r sudo rm -rf
