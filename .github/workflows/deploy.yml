@@ -5,67 +5,114 @@ on:
     branches:
       - main
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
     steps:
+      # 1️⃣ Checkout
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # 2️⃣ Setup Flutter (with cache)
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.2'
+          channel: stable
+          cache: true
 
+      # 3️⃣ Disable analytics (clean CI)
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
+
+      # 4️⃣ Cache pub dependencies
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      # 5️⃣ Install deps
       - name: Install dependencies
         run: flutter pub get
 
+      # 6️⃣ Build
       - name: Build Flutter Web
         run: |
           flutter build web \
             --release \
             --dart-define=PANKH_API_BASE_URL=https://api.pankh.email/api
 
-      - name: Prepare server directory
+      # 7️⃣ Create release folder
+      - name: Prepare release folder
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            sudo rm -rf /var/www/pankh/*
-            sudo mkdir -p /var/www/pankh
+            RELEASE=$(date +%Y%m%d%H%M%S)
+            echo "RELEASE=$RELEASE" >> $GITHUB_ENV
+            mkdir -p /var/www/pankh/releases/$RELEASE
 
-      - name: Copy build files
+      # 8️⃣ Upload build
+      - name: Upload build files
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "build/web/*"
-          target: "/var/www/pankh"
+          target: "/var/www/pankh/releases/${{ env.RELEASE }}"
           strip_components: 2
 
-      - name: Fix permissions
+      # 9️⃣ Activate release (zero downtime)
+      - name: Activate release
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            PREVIOUS=$(readlink -f /var/www/pankh/current || echo "")
+            echo "PREVIOUS=$PREVIOUS" >> $GITHUB_ENV
+
+            ln -sfn /var/www/pankh/releases/${{ env.RELEASE }} /var/www/pankh/current
+
             sudo chown -R www-data:www-data /var/www/pankh
             sudo chmod -R 755 /var/www/pankh
 
-      - name: Reload Nginx
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+      # 🔁 Rollback if deploy fails
+      - name: Rollback on failure
+        if: failure()
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            sudo nginx -t
-            sudo systemctl reload nginx
+            if [ -n "${{ env.PREVIOUS }}" ]; then
+              ln -sfn ${{ env.PREVIOUS }} /var/www/pankh/current
+              sudo systemctl reload nginx
+              echo "Rollback done"
+            else
+              echo "No previous release"
+            fi
+
+      # 🧹 Cleanup old releases (keep last 5)
+      - name: Cleanup old releases
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            ls -dt /var/www/pankh/releases/* | tail -n +6 | xargs rm -rf
