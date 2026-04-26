@@ -1,4 +1,4 @@
-name: Deploy Flutter Web (Client)
+name: Deploy Pankh (flutter web) (Client)
 
 on:
   push:
