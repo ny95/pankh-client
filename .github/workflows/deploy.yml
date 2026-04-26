@@ -69,9 +69,8 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "build/web/*"
+          source: "build/web/"
           target: "/var/www/pankh/releases/${{ env.RELEASE }}"
-          strip_components: 2
 
       # 9️⃣ Activate release (zero downtime)
       - name: Activate release
