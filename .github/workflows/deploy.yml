@@ -81,10 +81,18 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            RELEASE=${{ env.RELEASE }}
+
+            # 🔥 FIX: Move files out of build/web if exists
+            if [ -d "/var/www/pankh/releases/$RELEASE/build/web" ]; then
+              mv /var/www/pankh/releases/$RELEASE/build/web/* /var/www/pankh/releases/$RELEASE/
+              rm -rf /var/www/pankh/releases/$RELEASE/build
+            fi
+
             PREVIOUS=$(readlink -f /var/www/pankh/current || echo "")
             echo "PREVIOUS=$PREVIOUS" >> $GITHUB_ENV
 
-            ln -sfn /var/www/pankh/releases/${{ env.RELEASE }} /var/www/pankh/current
+            ln -sfn /var/www/pankh/releases/$RELEASE /var/www/pankh/current
 
             sudo chown -R www-data:www-data /var/www/pankh
             sudo chmod -R 755 /var/www/pankh
