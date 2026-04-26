@@ -82,8 +82,14 @@ jobs:
           script: |
             RELEASE=${{ env.RELEASE }}
 
+            # 🔥 FORCE FIX: Always flatten build/web → release root
+            if [ -d "/var/www/pankh/releases/$RELEASE/build/web" ]; then
+              echo "Fixing folder structure..."
+              mv /var/www/pankh/releases/$RELEASE/build/web/* /var/www/pankh/releases/$RELEASE/
+              rm -rf /var/www/pankh/releases/$RELEASE/build
+            fi
+
             PREVIOUS=$(readlink -f /var/www/pankh/current || echo "")
-            echo "Previous: $PREVIOUS"
 
             ln -sfn /var/www/pankh/releases/$RELEASE /var/www/pankh/current
 
