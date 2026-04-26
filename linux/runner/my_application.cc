@@ -1,5 +1,7 @@
 #include "my_application.h"
 
+#include <unistd.h>
+
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -13,6 +15,25 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static gchar* resolve_app_icon_path() {
+  gchar executable_path[4096];
+  ssize_t length = readlink("/proc/self/exe", executable_path, sizeof(executable_path) - 1);
+  if (length <= 0) {
+    return nullptr;
+  }
+
+  executable_path[length] = '\0';
+  g_autofree gchar* executable_dir = g_path_get_dirname(executable_path);
+  return g_build_filename(
+      executable_dir,
+      "data",
+      "flutter_assets",
+      "assets",
+      "logos",
+      "pankh-3d.png",
+      nullptr);
+}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -48,6 +69,10 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  g_autofree gchar* icon_path = resolve_app_icon_path();
+  if (icon_path != nullptr && g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
+    gtk_window_set_icon_from_file(window, icon_path, nullptr);
+  }
   gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
