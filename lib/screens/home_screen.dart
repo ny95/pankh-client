@@ -13,6 +13,7 @@ import '../providers/theme_provider.dart';
 import '../utils/helpers.dart';
 import '../widgets/side_menu.dart';
 import '../widgets/settings_menu.dart';
+import '../widgets/web_pointer_interceptor.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,7 +39,7 @@ class HomeScreenState extends State<HomeScreen> {
   String? _composeInitialMessageId;
   Timer? _composeStatusTimer;
   final ComposeEmailController _composeController = ComposeEmailController();
-  int _lastNotifiedCount = 0;
+  final int _lastNotifiedCount = 0;
   String? _lastDraftMessageId;
   bool _sizeUpdateScheduled = false;
   final List<String> bgImgList = [
@@ -181,38 +182,40 @@ class HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).cardColor,
         showDragHandle: true,
         builder:
-            (context) => SafeArea(
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.9,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Help & Feedback',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+            (context) => WebPointerInterceptor(
+              child: SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.9,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Help & Feedback',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Expanded(child: content),
-                  ],
+                      Expanded(child: content),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -221,23 +224,25 @@ class HomeScreenState extends State<HomeScreen> {
       await showDialog(
         context: context,
         builder:
-            (context) => AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Help & Feedback',
-                      overflow: TextOverflow.ellipsis,
+            (context) => WebPointerInterceptor(
+              child: AlertDialog(
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Help & Feedback',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                content: SizedBox(width: 520, height: 420, child: content),
               ),
-              content: SizedBox(width: 520, height: 420, child: content),
             ),
       );
     }
@@ -256,9 +261,7 @@ class HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<bool> _saveDraftIfNeeded({
-    required bool showSnackOnClose,
-  }) async {
+  Future<bool> _saveDraftIfNeeded({required bool showSnackOnClose}) async {
     final messenger = ScaffoldMessenger.of(context);
     final mailProvider = Provider.of<MailProvider>(context, listen: false);
     if (!_composeController.hasDraftContent) return false;
@@ -267,12 +270,9 @@ class HomeScreenState extends State<HomeScreen> {
     if (!mounted) return false;
     _flashComposeStatus('Saved in Drafts');
     if (showSnackOnClose) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved to Drafts')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved to Drafts')));
     }
-    final selectedName =
-        mailProvider.selectedFolder?.name.toLowerCase() ?? '';
+    final selectedName = mailProvider.selectedFolder?.name.toLowerCase() ?? '';
     if (selectedName.contains('draft')) {
       await mailProvider.refreshLatest();
     }
@@ -293,30 +293,30 @@ class HomeScreenState extends State<HomeScreen> {
         // Already opened this draft in the current session.
       } else {
         _lastDraftMessageId = messageId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final to = draftToOpen.to?.map((a) => a.email).join(', ') ?? '';
-        final cc = draftToOpen.cc?.map((a) => a.email).join(', ') ?? '';
-        final bcc = draftToOpen.bcc?.map((a) => a.email).join(', ') ?? '';
-        final subject = draftToOpen.decodeSubject() ?? '';
-        final body =
-            draftToOpen.decodeTextPlainPart() ??
-            draftToOpen.decodeTextHtmlPart() ??
-            '';
-        setState(() {
-          _composeOpen = true;
-          _composeMinimized = false;
-          _composeMaximized = false;
-          _composeSubject = subject;
-          _composeStatus = '';
-          _composeInitialTo = to;
-          _composeInitialCc = cc;
-          _composeInitialBcc = bcc;
-          _composeInitialSubject = subject;
-          _composeInitialBody = body;
-          _composeInitialMessageId = messageId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final to = draftToOpen.to?.map((a) => a.email).join(', ') ?? '';
+          final cc = draftToOpen.cc?.map((a) => a.email).join(', ') ?? '';
+          final bcc = draftToOpen.bcc?.map((a) => a.email).join(', ') ?? '';
+          final subject = draftToOpen.decodeSubject() ?? '';
+          final body =
+              draftToOpen.decodeTextPlainPart() ??
+              draftToOpen.decodeTextHtmlPart() ??
+              '';
+          setState(() {
+            _composeOpen = true;
+            _composeMinimized = false;
+            _composeMaximized = false;
+            _composeSubject = subject;
+            _composeStatus = '';
+            _composeInitialTo = to;
+            _composeInitialCc = cc;
+            _composeInitialBcc = bcc;
+            _composeInitialSubject = subject;
+            _composeInitialBody = body;
+            _composeInitialMessageId = messageId;
+          });
         });
-      });
       }
     }
     if (commonProvider.isSmallScreen != isSmallScreen) {
@@ -332,28 +332,28 @@ class HomeScreenState extends State<HomeScreen> {
         });
       }
     }
-    if (mailProvider.newMailCount > 0 &&
-        mailProvider.newMailCount != _lastNotifiedCount &&
-        mounted) {
-      _lastNotifiedCount = mailProvider.newMailCount;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'You have ${mailProvider.newMailCount} new email(s).',
-            ),
-            action: SnackBarAction(
-              label: 'Refresh',
-              onPressed: () {
-                mailProvider.refreshNewer();
-                mailProvider.clearNewMailCount();
-              },
-            ),
-          ),
-        );
-      });
-    }
+    // if (mailProvider.newMailCount > 0 &&
+    //     mailProvider.newMailCount != _lastNotifiedCount &&
+    //     mounted) {
+    //   _lastNotifiedCount = mailProvider.newMailCount;
+    //   WidgetsBinding.instance.addPostFrameCallback((_) {
+    //     if (!mounted) return;
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       SnackBar(
+    //         content: Text(
+    //           'You have ${mailProvider.newMailCount} new email(s).',
+    //         ),
+    //         action: SnackBarAction(
+    //           label: 'Refresh',
+    //           onPressed: () {
+    //             mailProvider.refreshNewer();
+    //             mailProvider.clearNewMailCount();
+    //           },
+    //         ),
+    //       ),
+    //     );
+    //   });
+    // }
 
     return Builder(
       builder:
@@ -459,7 +459,9 @@ class HomeScreenState extends State<HomeScreen> {
                                 ),
                               Expanded(
                                 child: Container(
-                                  margin: EdgeInsets.all(isSmallScreen ? 0 : 16),
+                                  margin: EdgeInsets.all(
+                                    isSmallScreen ? 0 : 16,
+                                  ),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(15),
                                     color: Theme.of(
@@ -522,7 +524,9 @@ class HomeScreenState extends State<HomeScreen> {
                           });
                         },
                         onMinimize: () {
-                          unawaited(_saveDraftIfNeeded(showSnackOnClose: false));
+                          unawaited(
+                            _saveDraftIfNeeded(showSnackOnClose: false),
+                          );
                           setState(() {
                             _composeMinimized = true;
                           });
@@ -677,30 +681,24 @@ class _ComposeWindow extends StatelessWidget {
 
     final content = Stack(
       children: [
-        Column(
-          children: [
-            header,
-            const Expanded(child: SizedBox.shrink()),
-          ],
-        ),
+        Column(children: [header, const Expanded(child: SizedBox.shrink())]),
         Positioned.fill(
           top: 40,
-          child: Offstage(
-            offstage: minimized,
-            child: compose,
-          ),
+          child: Offstage(offstage: minimized, child: compose),
         ),
       ],
     );
 
-    final window = Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width:  minimized ? 400 : (maximized ? maxWidth : normalWidth),
-        height: minimized ? 60 : (maximized ? maxHeight : normalHeight),
-        child: content,
+    final window = WebPointerInterceptor(
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: minimized ? 400 : (maximized ? maxWidth : normalWidth),
+          height: minimized ? 60 : (maximized ? maxHeight : normalHeight),
+          child: content,
+        ),
       ),
     );
 
@@ -714,10 +712,6 @@ class _ComposeWindow extends StatelessWidget {
       );
     }
 
-    return Positioned(
-      right: margin,
-      bottom: margin,
-      child: window,
-    );
+    return Positioned(right: margin, bottom: margin, child: window);
   }
 }

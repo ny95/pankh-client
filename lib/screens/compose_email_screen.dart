@@ -9,6 +9,7 @@ import '../services/draft_service.dart';
 import '../providers/auth_provider.dart';
 import '../providers/mail_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/web_pointer_interceptor.dart';
 
 class ComposeEmailController {
   Future<bool> Function({bool forceServer})? _saveDraft;
@@ -402,38 +403,40 @@ class _ComposeEmail extends State<ComposeEmail> {
     final selection = await showDialog<Map<String, String>?>(
       context: context,
       builder:
-          (context) => AlertDialog(
-            title: const Text('Insert link'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(labelText: 'URL'),
-                ),
-                TextField(
-                  controller: textController,
-                  decoration: const InputDecoration(
-                    labelText: 'Text (optional)',
+          (context) => WebPointerInterceptor(
+            child: AlertDialog(
+              title: const Text('Insert link'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: urlController,
+                    decoration: const InputDecoration(labelText: 'URL'),
                   ),
+                  TextField(
+                    controller: textController,
+                    decoration: const InputDecoration(
+                      labelText: 'Text (optional)',
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      'url': urlController.text.trim(),
+                      'text': textController.text.trim(),
+                    });
+                  },
+                  child: const Text('Insert'),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context, {
-                    'url': urlController.text.trim(),
-                    'text': textController.text.trim(),
-                  });
-                },
-                child: const Text('Insert'),
-              ),
-            ],
           ),
     );
     if (selection == null) return;

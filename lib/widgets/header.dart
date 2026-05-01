@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pankh/widgets/blur.dart';
 import 'package:pankh/widgets/open_dialog.dart';
 import 'package:pankh/widgets/settings/account/account.dart';
+import 'package:pankh/widgets/web_pointer_interceptor.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/mail_provider.dart';
@@ -30,19 +31,19 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
   Timer? _searchDebounce;
   bool showSearchFilter = false;
   late SearchController filterController = SearchController();
-  
+
   // Add GlobalKey to get the position of the search bar
   final GlobalKey _searchBarKey = GlobalKey();
-  
+
   // Add overlay entry reference
   OverlayEntry? _overlayEntry;
-  
+
   // Add animation controller
   late AnimationController _animationController;
   final ValueNotifier<bool> _isFullScreenCloseButtonNotifier =
       ValueNotifier<bool>(true);
   late Animation<double> _fadeAnimation;
-  
+
   // Add state for filter form
   String sizeOp = 'greater than';
   String sizeUnit = 'MB';
@@ -51,7 +52,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
   String selectedFolder = 'All Mail';
   bool hasAttachment = false;
   bool excludeChats = false;
-  
+
   // Dropdown options
   final List<String> sizeOpOptions = ['greater than', 'less than'];
   final List<String> sizeUnitOptions = ['KB', 'MB', 'GB'];
@@ -61,9 +62,9 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     '7 days',
     '1 month',
     '1 year',
-    'Custom'
+    'Custom',
   ];
-  
+
   // Text controllers
   final TextEditingController fromCtrl = TextEditingController();
   final TextEditingController toCtrl = TextEditingController();
@@ -74,10 +75,10 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
 
   // Add ScrollController to track scroll position
   final ScrollController _scrollController = ScrollController();
-  
+
   // Track overlay visibility
   bool _isOverlayVisible = false;
-  
+
   // Add resize listener
   late WidgetsBinding _widgetsBinding;
   late final _ResizeObserver _resizeObserver;
@@ -92,7 +93,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
-    
+
     _widgetsBinding = WidgetsBinding.instance;
     _resizeObserver = _ResizeObserver(this);
     _widgetsBinding.addPostFrameCallback((_) {
@@ -119,22 +120,19 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
 
   void _handleSearchChanged(String value, MailProvider mailProvider) {
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(
-      const Duration(milliseconds: 250),
-      () {
-        if (value.trim().isEmpty) {
-          mailProvider.clearLocalFilter();
-          if (mailProvider.isSearchMode) {
-            mailProvider.clearSearch();
-          }
-        } else {
-          if (mailProvider.isSearchMode) {
-            mailProvider.clearSearch();
-          }
-          mailProvider.applyLocalFilter(value);
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (value.trim().isEmpty) {
+        mailProvider.clearLocalFilter();
+        if (mailProvider.isSearchMode) {
+          mailProvider.clearSearch();
         }
-      },
-    );
+      } else {
+        if (mailProvider.isSearchMode) {
+          mailProvider.clearSearch();
+        }
+        mailProvider.applyLocalFilter(value);
+      }
+    });
   }
 
   void _handleSearchSubmitted(String value, MailProvider mailProvider) {
@@ -165,44 +163,46 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     _overlayEntry?.remove();
     _overlayEntry = null;
   }
-  void updateFullScreenCloseButton (bool status) {
+
+  void updateFullScreenCloseButton(bool status) {
     _isFullScreenCloseButtonNotifier.value = status;
   }
 
   void _showFilterOverlay(SearchController controller) {
     // Remove existing overlay if any
     _removeOverlay();
-    
+
     // Set the controller
     filterController = controller;
-    
+
     // Pre-fill include words with current search query
     final currentQuery = controller.text.trim();
     if (currentQuery.isNotEmpty) {
       includeCtrl.text = currentQuery;
     }
-    
+
     _isOverlayVisible = true;
-    
+
     // Create overlay entry
     _overlayEntry = OverlayEntry(
       builder: (context) {
         // Get the render box of the search bar
-        final renderBox = _searchBarKey.currentContext?.findRenderObject() as RenderBox?;
+        final renderBox =
+            _searchBarKey.currentContext?.findRenderObject() as RenderBox?;
         if (renderBox == null) return const SizedBox.shrink();
-        
+
         // Get the position relative to the screen
         final offset = renderBox.localToGlobal(Offset.zero);
         final size = renderBox.size;
-        
+
         // Calculate available space below and above
         final screenHeight = MediaQuery.of(context).size.height;
         final spaceBelow = screenHeight - (offset.dy + size.height);
         final spaceAbove = offset.dy;
-        
+
         // Determine if we should show above or below
         final bool showAbove = spaceBelow < 400 && spaceAbove > spaceBelow;
-        
+
         return Stack(
           children: [
             // Backdrop to capture taps outside
@@ -214,9 +214,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                     showSearchFilter = false;
                   });
                 },
-                child: Container(
-                  color: Colors.transparent,
-                ),
+                child: Container(color: Colors.transparent),
               ),
             ),
             // Positioned filter box with animation
@@ -225,27 +223,29 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
               bottom: showAbove ? screenHeight - offset.dy : null,
               left: offset.dx,
               width: size.width,
-              child: Material(
-                color: Colors.transparent,
-                elevation: 0,
-                child: AnimatedBuilder(
-                  animation: _animationController,
-                  builder: (context, child) {
-                    return Opacity(
-                      opacity: _fadeAnimation.value,
-                      child: child,
-                    );
-                  },
-                  child: _buildSearchFilterOverlay(
-                    context,
-                    controller,
-                    Provider.of<MailProvider>(context, listen: false),
-                    onClose: () {
-                      _removeOverlay();
-                      setState(() {
-                        showSearchFilter = false;
-                      });
+              child: WebPointerInterceptor(
+                child: Material(
+                  color: Colors.transparent,
+                  elevation: 0,
+                  child: AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _fadeAnimation.value,
+                        child: child,
+                      );
                     },
+                    child: _buildSearchFilterOverlay(
+                      context,
+                      controller,
+                      Provider.of<MailProvider>(context, listen: false),
+                      onClose: () {
+                        _removeOverlay();
+                        setState(() {
+                          showSearchFilter = false;
+                        });
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -254,7 +254,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
         );
       },
     );
-    
+
     // Insert the overlay and start animation
     Overlay.of(context).insert(_overlayEntry!);
     _animationController.forward();
@@ -285,11 +285,12 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     if (sizeCtrl.text.trim().isNotEmpty) {
       final value = double.tryParse(sizeCtrl.text.trim());
       if (value != null) {
-        final multiplier = sizeUnit == 'KB'
-            ? 1024
-            : sizeUnit == 'MB'
-            ? 1024 * 1024
-            : 1024 * 1024 * 1024;
+        final multiplier =
+            sizeUnit == 'KB'
+                ? 1024
+                : sizeUnit == 'MB'
+                ? 1024 * 1024
+                : 1024 * 1024 * 1024;
         final bytes = (value * multiplier).round();
         tokens.add(
           sizeOp == 'greater than' ? 'larger:$bytes' : 'smaller:$bytes',
@@ -339,20 +340,14 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     required VoidCallback onClose,
   }) {
     final folders = mailProvider.folders;
-    final folderNames = {
-      'All Mail',
-      ...folders.map((f) => f.name),
-    }.toList();
+    final folderNames = {'All Mail', ...folders.map((f) => f.name)}.toList();
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: Theme.of(context).dividerColor,
-          width: 1,
-        ),
+        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -366,7 +361,12 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.only(left: 16, top:6, right: 6, bottom: 6),
+            padding: const EdgeInsets.only(
+              left: 16,
+              top: 6,
+              right: 6,
+              bottom: 6,
+            ),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
@@ -382,10 +382,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                   'Search options',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close),
-                ),
+                IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
               ],
             ),
           ),
@@ -542,7 +539,8 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                       setState(() {
                                         dateWithin = value;
                                       });
-                                      if (value == 'Custom' && customDate == null) {
+                                      if (value == 'Custom' &&
+                                          customDate == null) {
                                         setState(() {
                                           customDate = DateTime.now();
                                         });
@@ -567,7 +565,8 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                         }
                                       });
                                     },
-                                    backgroundColor: Theme.of(context).cardColor,
+                                    backgroundColor:
+                                        Theme.of(context).cardColor,
                                     parentOverlayEntry: _overlayEntry,
                                   ),
                                 ),
@@ -596,7 +595,9 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                               Checkbox(
                                 value: hasAttachment,
                                 onChanged: (value) {
-                                  setState(() => hasAttachment = value ?? false);
+                                  setState(
+                                    () => hasAttachment = value ?? false,
+                                  );
                                 },
                               ),
                               const Text('Has attachment'),
@@ -631,10 +632,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: onClose,
-                  child: const Text('Cancel'),
-                ),
+                TextButton(onPressed: onClose, child: const Text('Cancel')),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () {
@@ -683,7 +681,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     final mailProvider = Provider.of<MailProvider>(context, listen: false);
     var size = MediaQuery.of(context).size;
     bool isSmallScreen = size.width < 800;
-    
+
     return Column(
       children: [
         Padding(
@@ -705,15 +703,15 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                         onPressed: widget.toggleMenu,
                         icon: const Icon(Icons.menu),
                       ),
-                      SizedBox(width: 40,),
+                      SizedBox(width: 40),
                       Flexible(
                         child: Image.asset(
                           'assets/logos/pankh-2d.png',
                           // width: 75,
                           height: 45,
                         ),
-                      )
-                      // const Text(  
+                      ),
+                      // const Text(
                       //   'Wings',
                       //   style: TextStyle(
                       //     fontSize: 18,
@@ -726,9 +724,8 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
               Flexible(
                 flex: 7,
                 child: Container(
-                  padding: !isSmallScreen
-                      ? const EdgeInsets.only(left: 55.0)
-                      : null,
+                  padding:
+                      !isSmallScreen ? const EdgeInsets.only(left: 55.0) : null,
                   child: Container(
                     key: _searchBarKey,
                     child: SearchAnchor(
@@ -844,23 +841,28 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                     },
                                   ),
                                   Tooltip(
-                                    message: isSmallScreen
-                                        ? 'Show Profile'
-                                        : 'Search options',
+                                    message:
+                                        isSmallScreen
+                                            ? 'Show Profile'
+                                            : 'Search options',
                                     child: IconButton(
                                       onPressed: () {
                                         if (isSmallScreen) {
                                           CustomDialog.show(
-                                            child: AccountSettingsTab(updateFullScreenCloseButton: updateFullScreenCloseButton,),
+                                            child: AccountSettingsTab(
+                                              updateFullScreenCloseButton:
+                                                  updateFullScreenCloseButton,
+                                            ),
                                             context: context,
                                             isFullScreenCloseButtonListenable:
                                                 _isFullScreenCloseButtonNotifier,
                                           );
                                         } else {
                                           setState(() {
-                                            showSearchFilter = !showSearchFilter;
+                                            showSearchFilter =
+                                                !showSearchFilter;
                                           });
-                                          
+
                                           if (showSearchFilter) {
                                             _showFilterOverlay(controller);
                                           } else {
@@ -886,19 +888,18 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                         SearchController controller,
                       ) {
                         final query = controller.text.trim().toLowerCase();
-                        final history = mailProvider.searchHistory
-                            .where(
-                              (item) =>
-                                  query.isEmpty ||
-                                  item.toLowerCase().contains(query),
-                            )
-                            .toList();
+                        final history =
+                            mailProvider.searchHistory
+                                .where(
+                                  (item) =>
+                                      query.isEmpty ||
+                                      item.toLowerCase().contains(query),
+                                )
+                                .toList();
 
                         if (history.isEmpty) {
                           return const <Widget>[
-                            ListTile(
-                              title: Text('No recent searches'),
-                            ),
+                            ListTile(title: Text('No recent searches')),
                           ];
                         }
 
@@ -959,7 +960,9 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                           child: IconButton(
                             onPressed: () {
                               CustomDialog.show(
-                                child: AccountSettingsTab(updateFullScreenCloseButton: (p0)=>{},),
+                                child: AccountSettingsTab(
+                                  updateFullScreenCloseButton: (p0) => {},
+                                ),
                                 context: context,
                               );
                             },
@@ -987,9 +990,10 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                     });
                   },
                   borderRadius: BorderRadius.circular(20),
-                  child: filterHidden
-                      ? const Icon(Icons.filter_list_off_rounded)
-                      : const Icon(Icons.filter_list_rounded),
+                  child:
+                      filterHidden
+                          ? const Icon(Icons.filter_list_off_rounded)
+                          : const Icon(Icons.filter_list_rounded),
                 ),
               ],
             ),
@@ -1002,9 +1006,9 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
 // Observer for resize events
 class _ResizeObserver with WidgetsBindingObserver {
   final HeaderState _state;
-  
+
   _ResizeObserver(this._state);
-  
+
   @override
   void didChangeMetrics() {
     _state._handleResize();
@@ -1053,37 +1057,44 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
 
   void _openDropdown() {
     if (widget.onChanged == null) return;
-    
-    final renderBox = _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
+
+    final renderBox =
+        _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
-    
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
         // Recalculate position on every build
-        final currentRenderBox = _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
+        final currentRenderBox =
+            _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
         if (currentRenderBox == null) return const SizedBox.shrink();
-        
+
         final currentOffset = currentRenderBox.localToGlobal(Offset.zero);
         final currentSize = currentRenderBox.size;
-        
+
         // Get screen dimensions
         final screenHeight = MediaQuery.of(context).size.height;
         final screenWidth = MediaQuery.of(context).size.width;
-        
+
         // Calculate available space
-        final spaceBelow = screenHeight - (currentOffset.dy + currentSize.height);
+        final spaceBelow =
+            screenHeight - (currentOffset.dy + currentSize.height);
         final spaceAbove = currentOffset.dy;
-        
+
         // Determine if dropdown should open above or below
         final bool openAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-        
+
         // Calculate dropdown width
         final double dropdownWidth = currentSize.width;
-        
+
         // Ensure dropdown doesn't go off screen horizontally
-        final double rightOverflow = (currentOffset.dx + dropdownWidth) - screenWidth;
-        final double adjustedLeft = rightOverflow > 0 ? currentOffset.dx - rightOverflow : currentOffset.dx;
-        
+        final double rightOverflow =
+            (currentOffset.dx + dropdownWidth) - screenWidth;
+        final double adjustedLeft =
+            rightOverflow > 0
+                ? currentOffset.dx - rightOverflow
+                : currentOffset.dx;
+
         return Stack(
           children: [
             Positioned.fill(
@@ -1097,37 +1108,39 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
               bottom: openAbove ? screenHeight - currentOffset.dy : null,
               left: adjustedLeft,
               width: dropdownWidth,
-              child: Material(
-                elevation: 8,
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  decoration: BoxDecoration(
-                    color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.items.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.items[index];
-                      final isSelected = item == widget.value;
-                      return InkWell(
-                        onTap: () {
-                          widget.onChanged?.call(item);
-                          _closeDropdown();
-                          _updateParentOverlay();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+              child: WebPointerInterceptor(
+                child: Material(
+                  elevation: 8,
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    decoration: BoxDecoration(
+                      color: widget.backgroundColor,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: widget.items.length,
+                      itemBuilder: (context, index) {
+                        final item = widget.items[index];
+                        final isSelected = item == widget.value;
+                        return InkWell(
+                          onTap: () {
+                            widget.onChanged?.call(item);
+                            _closeDropdown();
+                            _updateParentOverlay();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            color: isSelected ? Colors.grey.shade200 : null,
+                            child: Text(item.toString()),
                           ),
-                          color: isSelected ? Colors.grey.shade200 : null,
-                          child: Text(item.toString()),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -1136,7 +1149,7 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         );
       },
     );
-    
+
     setState(() => _isOpen = true);
     Overlay.of(context).insert(_overlayEntry!);
   }
@@ -1209,7 +1222,7 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
   bool _isOpen = false;
   DateTime _currentMonth = DateTime.now();
   DateTime? _selectedDate;
-  
+
   final List<String> weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   @override
@@ -1249,35 +1262,42 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
   }
 
   void _openDropdown() {
-    final renderBox = _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
-    
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
-        final currentRenderBox = _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
+        final currentRenderBox =
+            _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
         if (currentRenderBox == null) return const SizedBox.shrink();
-        
+
         final currentOffset = currentRenderBox.localToGlobal(Offset.zero);
         final currentSize = currentRenderBox.size;
-        
+
         // Get screen dimensions
         final screenHeight = MediaQuery.of(context).size.height;
         final screenWidth = MediaQuery.of(context).size.width;
-        
+
         // Calculate available space
-        final spaceBelow = screenHeight - (currentOffset.dy + currentSize.height);
+        final spaceBelow =
+            screenHeight - (currentOffset.dy + currentSize.height);
         final spaceAbove = currentOffset.dy;
-        
+
         // Determine if dropdown should open above or below
         final bool openAbove = spaceBelow < 400 && spaceAbove > spaceBelow;
-        
+
         // Calculate dropdown width
         final double dropdownWidth = 300;
-        
+
         // Ensure dropdown doesn't go off screen horizontally
-        final double rightOverflow = (currentOffset.dx + dropdownWidth) - screenWidth;
-        final double adjustedLeft = rightOverflow > 0 ? currentOffset.dx - rightOverflow : currentOffset.dx;
-        
+        final double rightOverflow =
+            (currentOffset.dx + dropdownWidth) - screenWidth;
+        final double adjustedLeft =
+            rightOverflow > 0
+                ? currentOffset.dx - rightOverflow
+                : currentOffset.dx;
+
         return Stack(
           children: [
             Positioned.fill(
@@ -1291,109 +1311,114 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
               bottom: openAbove ? screenHeight - currentOffset.dy : null,
               left: adjustedLeft,
               width: dropdownWidth,
-              child: Material(
-                elevation: 8,
-                child: Container(
-                  width: dropdownWidth,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Month and Year header with navigation
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed: () {
-                              setState(() {
-                                _currentMonth = DateTime(
-                                  _currentMonth.year,
-                                  _currentMonth.month - 1,
-                                );
-                              });
-                              _overlayEntry?.markNeedsBuild();
-                            },
-                          ),
-                          Text(
-                            '${_monthName(_currentMonth.month)} ${_currentMonth.year}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+              child: WebPointerInterceptor(
+                child: Material(
+                  elevation: 8,
+                  child: Container(
+                    width: dropdownWidth,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: widget.backgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Month and Year header with navigation
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chevron_left),
+                              onPressed: () {
+                                setState(() {
+                                  _currentMonth = DateTime(
+                                    _currentMonth.year,
+                                    _currentMonth.month - 1,
+                                  );
+                                });
+                                _overlayEntry?.markNeedsBuild();
+                              },
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed: () {
-                              setState(() {
-                                _currentMonth = DateTime(
-                                  _currentMonth.year,
-                                  _currentMonth.month + 1,
-                                );
-                              });
-                              _overlayEntry?.markNeedsBuild();
-                            },
-                          ),
-                        ],
-                      ),
-                      
-                      // Weekday headers
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: weekDays.map((day) => 
-                            Container(
-                              width: 32,
-                              alignment: Alignment.center,
-                              child: Text(
-                                day,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
+                            Text(
+                              '${_monthName(_currentMonth.month)} ${_currentMonth.year}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
                             ),
-                          ).toList(),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_right),
+                              onPressed: () {
+                                setState(() {
+                                  _currentMonth = DateTime(
+                                    _currentMonth.year,
+                                    _currentMonth.month + 1,
+                                  );
+                                });
+                                _overlayEntry?.markNeedsBuild();
+                              },
+                            ),
+                          ],
                         ),
-                      ),
-                      
-                      // Calendar days grid
-                      _buildCalendarGrid(),
-                      
-                      const Divider(height: 16),
-                      
-                      // Action buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              widget.onDateSelected(null);
-                              _closeDropdown();
-                              _updateParentOverlay();
-                            },
-                            child: const Text('Clear'),
+
+                        // Weekday headers
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children:
+                                weekDays
+                                    .map(
+                                      (day) => Container(
+                                        width: 32,
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          day,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              if (_selectedDate != null) {
-                                widget.onDateSelected(_selectedDate);
-                              }
-                              _closeDropdown();
-                              _updateParentOverlay();
-                            },
-                            child: const Text('Select'),
-                          ),
-                        ],
-                      ),
-                    ],
+                        ),
+
+                        // Calendar days grid
+                        _buildCalendarGrid(),
+
+                        const Divider(height: 16),
+
+                        // Action buttons
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                widget.onDateSelected(null);
+                                _closeDropdown();
+                                _updateParentOverlay();
+                              },
+                              child: const Text('Clear'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () {
+                                if (_selectedDate != null) {
+                                  widget.onDateSelected(_selectedDate);
+                                }
+                                _closeDropdown();
+                                _updateParentOverlay();
+                              },
+                              child: const Text('Select'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1402,7 +1427,7 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
         );
       },
     );
-    
+
     setState(() => _isOpen = true);
     Overlay.of(context).insert(_overlayEntry!);
   }
@@ -1412,14 +1437,14 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
     final firstDay = DateTime(_currentMonth.year, _currentMonth.month, 1);
     int startingWeekday = firstDay.weekday - 1; // Convert to Monday=0
     if (startingWeekday < 0) startingWeekday = 6;
-    
+
     // Get number of days in month
     final lastDay = DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
     final daysInMonth = lastDay.day;
-    
+
     // Calculate total cells needed (6 weeks)
     final totalCells = 42;
-    
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -1432,18 +1457,23 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
       itemBuilder: (context, index) {
         final dayNumber = index - startingWeekday + 1;
         final isInMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
-        
+
         if (!isInMonth) {
           return Container();
         }
-        
-        final date = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
-        final isSelected = _selectedDate != null &&
+
+        final date = DateTime(
+          _currentMonth.year,
+          _currentMonth.month,
+          dayNumber,
+        );
+        final isSelected =
+            _selectedDate != null &&
             _selectedDate!.year == date.year &&
             _selectedDate!.month == date.month &&
             _selectedDate!.day == date.day;
         final isToday = _isSameDay(date, DateTime.now());
-        
+
         return GestureDetector(
           onTap: () {
             setState(() {
@@ -1455,9 +1485,10 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected 
-                  ? Theme.of(context).primaryColor
-                  : isToday
+              color:
+                  isSelected
+                      ? Theme.of(context).primaryColor
+                      : isToday
                       ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
                       : null,
             ),
@@ -1482,8 +1513,18 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
 
   String _monthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[month - 1];
   }
