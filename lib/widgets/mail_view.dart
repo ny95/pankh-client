@@ -65,7 +65,9 @@ class ViewMail extends StatelessWidget {
       body: Container(
         decoration:
             commonProvider.isSmallScreen
-                ? BoxDecoration(image: getBackgroundDecoration(themeProvider))
+                ? BoxDecoration(
+                  image: getBackgroundDecoration(context, themeProvider),
+                )
                 : BoxDecoration(
                   // borderRadius: BorderRadius.circular(15),
                   boxShadow: [
@@ -87,9 +89,7 @@ class ViewMail extends StatelessWidget {
                   Container(
                     color:
                         commonProvider.isSmallScreen
-                            ? Theme.of(
-                              context,
-                            ).canvasColor.withValues(
+                            ? Theme.of(context).canvasColor.withValues(
                               alpha: themeProvider.bgOpacity,
                             )
                             : null,
@@ -102,10 +102,11 @@ class ViewMail extends StatelessWidget {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (panePreviewOff && !commonProvider.isSmallScreen) {
-                                commonProvider.setIsMailView(isMailView: false);
-                            } 
-                            if(commonProvider.isSmallScreen) {
+                            if (panePreviewOff &&
+                                !commonProvider.isSmallScreen) {
+                              commonProvider.setIsMailView(isMailView: false);
+                            }
+                            if (commonProvider.isSmallScreen) {
                               Navigator.pop(context);
                             }
                           },
@@ -206,9 +207,7 @@ class ViewMail extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                      ),
+                      bottom: BorderSide(color: Theme.of(context).dividerColor),
                     ),
                   ),
                   child: Column(
@@ -225,8 +224,7 @@ class ViewMail extends StatelessWidget {
                               child: Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -287,7 +285,8 @@ class ViewMail extends StatelessWidget {
                                 minWidth: constraints.maxWidth,
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -309,10 +308,9 @@ class ViewMail extends StatelessWidget {
                                           '<$fromEmail>',
                                           style: TextStyle(
                                             color:
-                                                Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.color,
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall?.color,
                                           ),
                                           softWrap: false,
                                         ),
@@ -327,10 +325,9 @@ class ViewMail extends StatelessWidget {
                                             : '',
                                         style: TextStyle(
                                           color:
-                                              Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.color,
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall?.color,
                                         ),
                                         softWrap: false,
                                       ),
@@ -342,7 +339,7 @@ class ViewMail extends StatelessWidget {
                                         onPressed: () {},
                                       ),
                                     ],
-                                  )
+                                  ),
                                 ],
                               ),
                             ),
@@ -365,7 +362,9 @@ class ViewMail extends StatelessWidget {
                         return NavigationActionPolicy.ALLOW;
                       }
                       final scheme = uri.scheme.toLowerCase();
-                      if (scheme == 'http' || scheme == 'https' || scheme == 'mailto') {
+                      if (scheme == 'http' ||
+                          scheme == 'https' ||
+                          scheme == 'mailto') {
                         final ok = await launchUrl(
                           uri,
                           mode: LaunchMode.externalApplication,
@@ -394,24 +393,13 @@ class ViewMail extends StatelessWidget {
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 12),
-      ),
+      child: Text(label, style: const TextStyle(fontSize: 12)),
     );
   }
 
   String _formatDateTime(DateTime dateTime) {
     final local = dateTime.toLocal();
-    const weekdays = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const months = [
       'Jan',
       'Feb',

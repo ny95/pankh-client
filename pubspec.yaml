@@ -49,4 +49,8 @@ flutter:
   assets:
     - assets/icons/
     - assets/images/
+    - assets/images/bg/480/
+    - assets/images/bg/960/
+    - assets/images/bg/1440/
+    - assets/images/bg/1920/
     - assets/logos/

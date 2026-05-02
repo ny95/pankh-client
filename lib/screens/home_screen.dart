@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:pankh/providers/common_provider.dart';
+import 'package:pankh/providers/layout_provider.dart';
 import 'package:pankh/providers/mail_provider.dart';
 import 'package:pankh/widgets/blur.dart';
 import 'package:pankh/widgets/header.dart';
@@ -284,6 +285,9 @@ class HomeScreenState extends State<HomeScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final commonProvider = Provider.of<CommonProvider>(context);
     final mailProvider = Provider.of<MailProvider>(context);
+    final layoutProvider = Provider.of<LayoutProvider>(context);
+    bool panePreviewOff = layoutProvider.layout == "pane_preview_off";
+
     var size = MediaQuery.of(context).size;
     bool isSmallScreen = size.width < 800;
     final draftToOpen = mailProvider.takeDraftToCompose();
@@ -407,7 +411,7 @@ class HomeScreenState extends State<HomeScreen> {
             body: Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).canvasColor,
-                image: getBackgroundDecoration(themeProvider),
+                image: getBackgroundDecoration(context, themeProvider),
               ),
               child: SafeArea(
                 child: Stack(
@@ -475,7 +479,9 @@ class HomeScreenState extends State<HomeScreen> {
                                     blur: themeProvider.bgBlur,
                                     child: Column(
                                       children: [
-                                        if (!isSmallScreen) MailNav(),
+                                        if (!(panePreviewOff &&
+                                      commonProvider.isMailView) &&
+                                  !isSmallScreen) MailNav(),
                                         Expanded(child: MailListContainer()),
                                       ],
                                     ),

@@ -8,6 +8,7 @@ import 'package:pankh/widgets/settings/notification.dart';
 import 'package:pankh/widgets/settings/security.dart';
 import 'package:provider/provider.dart';
 import '../utils/image_shade.dart';
+import '../utils/helpers.dart' hide isImageDark;
 import '../providers/theme_provider.dart';
 import '../providers/layout_provider.dart';
 import '../providers/inbox_type_provider.dart';
@@ -30,18 +31,19 @@ class SettingsMenuState extends State<SettingsMenu> {
   bool settingCard = true;
   final ValueNotifier<bool> _isFullScreenCloseButtonNotifier =
       ValueNotifier<bool>(true);
+  final Map<String, bool> _darkCache = {};
 
   final List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
     "thumbnail-theme-dark.jpg",
     "thumbnail-theme-mccutcheon.jpg",
-    "thumbnail-theme-mccutcheon 2.jpg",
+    "thumbnail-theme-mccutcheon-2.jpg",
     "thumbnail-theme-mirrographer.jpg",
     "thumbnail-theme-nicolas-poupart.jpg",
     "thumbnail-theme-padrinan.jpg",
     "thumbnail-theme-pixabay.jpg",
-    "thumbnail-theme-pixabay 2.jpg",
+    "thumbnail-theme-pixabay-2.jpg",
     "thumbnail-theme-quangnguyenvinh.jpg",
     "thumbnail-theme-therato.jpg",
   ];
@@ -116,6 +118,26 @@ class SettingsMenuState extends State<SettingsMenu> {
     selectedReadingPane = layoutProvider.layout;
     selectedInboxType = inboxTypeProvider.inboxType;
     currentBackground = themeProvider.theme;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _precacheAll();
+    });
+  }
+
+  void _precacheAll() {
+    for (final img in bgImgList.sublist(3)) {
+      if (!_darkCache.containsKey(img)) {
+        isImageDark('assets/images/$img', null).then((isDark) {
+          if (mounted) _darkCache[img] = isDark;
+        });
+      }
+      precacheImage(AssetImage('assets/images/bg/${_bucket()}/${img.replaceAll('thumbnail-', '')}'), context);
+    }
+  }
+
+  int _bucket() {
+    final w = MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context);
+    return w <= 480 ? 480 : w <= 960 ? 960 : w <= 1440 ? 1440 : 1920;
   }
 
   Future<void> _pickImage(BuildContext context) async {
@@ -182,53 +204,23 @@ class SettingsMenuState extends State<SettingsMenu> {
                 child: Wrap(
                   spacing: 16,
                   runSpacing: 16,
-                  children:
-                      bgImgList.map((img) {
-                        return GestureDetector(
-                          onTap: () async {
-                            await updateTheme(img);
-                          },
-                          child: Container(
-                            width: 230,
-                            height: 130,
-                            decoration: BoxDecoration(
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  spreadRadius: 1,
-                                  blurRadius: 5,
-                                  offset: const Offset(1, 1),
-                                ),
-                              ],
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  themeProvider.bgImg == img
-                                      ? Border.all(color: Colors.blue, width: 3)
-                                      : null,
-                              image: DecorationImage(
-                                image: AssetImage('assets/images/$img'),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child:
-                                themeProvider.bgImg == img
-                                    ? Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(7),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.check_rounded,
-                                          size: 50,
-                                          color: Colors.blue,
-                                        ),
-                                      ),
-                                    )
-                                    : null,
-                          ),
-                        );
-                      }).toList(),
+                  children: bgImgList.map((img) =>
+                    _ThumbItem(
+                      img: img,
+                      width: 230,
+                      height: 130,
+                      onTap: () => updateTheme(img),
+                      iconSize: 50,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          spreadRadius: 1,
+                          blurRadius: 5,
+                          offset: const Offset(1, 1),
+                        ),
+                      ],
+                    ),
+                  ).toList(),
                 ),
               ),
             ),
@@ -286,8 +278,20 @@ class SettingsMenuState extends State<SettingsMenu> {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     bool shadeCheck = !bgImgList.sublist(0, 3).contains(img);
     if (shadeCheck) {
+      // Run dark-check and background preload in parallel to minimise delay
+      final darkFuture = _darkCache.containsKey(img)
+          ? Future.value(_darkCache[img]!)
+          : isImageDark('assets/images/$img', null);
+      final bgPath = responsiveBackgroundAsset(context, img);
+      final precacheFuture = precacheImage(AssetImage(bgPath), context);
+
+      final isDark = await darkFuture;
+      _darkCache[img] = isDark;
+      await precacheFuture;
+
+      if (!mounted) return;
       themeProvider.setTheme(
-        theme: await isImageDark('assets/images/$img', null) ? "dark" : "light",
+        theme: isDark ? "dark" : "light",
         bgImg: img,
         bgBlur: true,
         bgOpacity: 0.5,
@@ -556,7 +560,11 @@ class SettingsMenuState extends State<SettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    // listen: false — bgImg changes are handled per-item inside _ThumbItem via Selector
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    // Only subscribe to the two values this widget actually renders
+    final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
+    final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
     final layoutProvider = Provider.of<LayoutProvider>(context);
     final inboxTypeProvider = Provider.of<InboxTypeProvider>(context);
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
@@ -567,7 +575,7 @@ class SettingsMenuState extends State<SettingsMenu> {
       margin: isSmallScreen ? null : const EdgeInsets.fromLTRB(0, 16, 16, 16),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor.withValues(
-          alpha: themeProvider.bgOpacity,
+          alpha: bgOpacity,
         ),
         borderRadius: BorderRadius.only(topLeft: Radius.circular(15), bottomLeft:Radius.circular(15), topRight: isSmallScreen? Radius.zero : Radius.circular(15), bottomRight: isSmallScreen ? Radius.zero : Radius.circular(15) ),
         boxShadow: [
@@ -583,7 +591,7 @@ class SettingsMenuState extends State<SettingsMenu> {
       child:
           !widget.hidden
               ? Blur(
-                blur: themeProvider.bgBlur,
+                blur: bgBlur,
                 child: Column(
                   children: [
                     Container(
@@ -718,64 +726,22 @@ class SettingsMenuState extends State<SettingsMenu> {
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children:
-                                      bgImgList.sublist(0, 9).map((img) {
-                                        return GestureDetector(
-                                          onTap: () async {
-                                            await updateTheme(img);
-                                          },
-                                          child: Container(
-                                            width: 78.65,
-                                            height: 60,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              border:
-                                                  themeProvider.bgImg == img
-                                                      ? Border.all(
-                                                        color: Colors.blue,
-                                                        width: 3,
-                                                      )
-                                                      : null,
-                                              image: DecorationImage(
-                                                image: AssetImage(
-                                                  'assets/images/$img',
-                                                ),
-                                                fit: BoxFit.cover,
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color:
-                                                      Theme.of(
-                                                        context,
-                                                      ).dividerColor,
-                                                  blurRadius: 0,
-                                                  spreadRadius: 1,
-                                                  offset: const Offset(0, 0),
-                                                ),
-                                              ],
-                                            ),
-                                            child:
-                                                themeProvider.bgImg == img
-                                                    ? Container(
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black54,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              7,
-                                                            ),
-                                                      ),
-                                                      child: const Center(
-                                                        child: Icon(
-                                                          Icons.check_rounded,
-                                                          color: Colors.blue,
-                                                        ),
-                                                      ),
-                                                    )
-                                                    : null,
-                                          ),
-                                        );
-                                      }).toList(),
+                                  children: bgImgList.sublist(0, 9).map((img) =>
+                                    _ThumbItem(
+                                      img: img,
+                                      width: 78.65,
+                                      height: 60,
+                                      onTap: () => updateTheme(img),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Theme.of(context).dividerColor,
+                                          blurRadius: 0,
+                                          spreadRadius: 1,
+                                          offset: const Offset(0, 0),
+                                        ),
+                                      ],
+                                    ),
+                                  ).toList(),
                                 ),
                                 const SizedBox(height: 20),
                                 const Text(
@@ -857,6 +823,68 @@ class SettingsMenuState extends State<SettingsMenu> {
                 ),
               )
               : null,
+    );
+  }
+}
+
+class _ThumbItem extends StatelessWidget {
+  final String img;
+  final double width;
+  final double height;
+  final VoidCallback onTap;
+  final List<BoxShadow>? boxShadow;
+  final double? iconSize;
+
+  const _ThumbItem({
+    required this.img,
+    required this.width,
+    required this.height,
+    required this.onTap,
+    this.boxShadow,
+    this.iconSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              image: DecorationImage(
+                image: AssetImage('assets/images/$img'),
+                fit: BoxFit.cover,
+              ),
+              boxShadow: boxShadow,
+            ),
+          ),
+          Selector<ThemeProvider, bool>(
+            selector: (_, p) => p.bgImg == img,
+            builder: (_, isSelected, _) => isSelected
+                ? Container(
+                    width: width,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: Colors.blue, width: 3),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.check_rounded,
+                        color: Colors.blue,
+                        size: iconSize,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
     );
   }
 }

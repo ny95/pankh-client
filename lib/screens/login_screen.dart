@@ -21,23 +21,23 @@ class LoginScreen extends StatefulWidget {
 
 class LoginScreenState extends State<LoginScreen> {
   static const List<String> _backgroundImages = [
-    'assets/images/theme-mccutcheon 2.jpg',
+    'assets/images/theme-mccutcheon-2.jpg',
     'assets/images/theme-mccutcheon.jpg',
     'assets/images/theme-mirrographer.jpg',
     'assets/images/theme-nicolas-poupart.jpg',
     'assets/images/theme-padrinan.jpg',
-    'assets/images/theme-pixabay 2.jpg',
+    'assets/images/theme-pixabay-2.jpg',
     'assets/images/theme-pixabay.jpg',
     'assets/images/theme-quangnguyenvinh.jpg',
     'assets/images/theme-therato.jpg',
   ];
   static const List<String> _webBackgroundImages = [
-    'assets/images/thumbnail-theme-mccutcheon 2.jpg',
+    'assets/images/thumbnail-theme-mccutcheon-2.jpg',
     'assets/images/thumbnail-theme-mccutcheon.jpg',
     'assets/images/thumbnail-theme-mirrographer.jpg',
     'assets/images/thumbnail-theme-nicolas-poupart.jpg',
     'assets/images/thumbnail-theme-padrinan.jpg',
-    'assets/images/thumbnail-theme-pixabay 2.jpg',
+    'assets/images/thumbnail-theme-pixabay-2.jpg',
     'assets/images/thumbnail-theme-pixabay.jpg',
     'assets/images/thumbnail-theme-quangnguyenvinh.jpg',
     'assets/images/thumbnail-theme-therato.jpg',

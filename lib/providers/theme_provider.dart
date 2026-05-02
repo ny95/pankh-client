@@ -21,16 +21,16 @@ class ThemeProvider with ChangeNotifier {
     String bgImg = "",
     bool bgBlur = false,
     double bgOpacity = 1.0,
-  }) async {
+  }) {
     _theme = theme;
     _bgImg = bgImg;
     _bgBlur = bgBlur;
     _bgOpacity = bgOpacity;
-    await HiveStorage.putValue(key: "theme", value: theme);
-    await HiveStorage.putValue(key: "bgImg", value: bgImg);
-    await HiveStorage.putValue(key: "bgBlur", value: bgBlur);
-    await HiveStorage.putValue(key: "bgOpacity", value: bgOpacity);
-    notifyListeners();
+    notifyListeners(); // update UI immediately before disk writes
+    HiveStorage.putValue(key: "theme", value: theme);
+    HiveStorage.putValue(key: "bgImg", value: bgImg);
+    HiveStorage.putValue(key: "bgBlur", value: bgBlur);
+    HiveStorage.putValue(key: "bgOpacity", value: bgOpacity);
   }
 
   void _loadTheme() {
@@ -41,7 +41,7 @@ class ThemeProvider with ChangeNotifier {
 
     final savedBg = HiveStorage.getValue(key: "bgImg");
     if (savedBg != null) {
-      _bgImg = savedBg;
+      _bgImg = savedBg.replaceAll(' ', '-');
     }
     final savedBlur = HiveStorage.getValue(key: "bgBlur");
     if (savedBlur != null) {

@@ -18,6 +18,30 @@ class BackendMailPage {
   final String? nextCursor;
 }
 
+class ImapCredentials {
+  const ImapCredentials({
+    required this.host,
+    required this.port,
+    required this.secure,
+    required this.username,
+    required this.password,
+  });
+
+  final String host;
+  final int port;
+  final bool secure;
+  final String username;
+  final String password;
+
+  Map<String, dynamic> toJson() => {
+        'host': host,
+        'port': port,
+        'secure': secure,
+        'username': username,
+        'password': password,
+      };
+}
+
 class EmailServerSettings {
   const EmailServerSettings({
     required this.host,
@@ -292,6 +316,163 @@ class BackendApiService {
           'attachments': await _encodeAttachments(attachmentPaths),
       }),
     ).then(_ensureSuccess);
+  }
+
+  // IMAP proxy — plain-credential endpoints
+
+  static Future<List<MailFolder>> fetchImapFolders({
+    required ImapCredentials creds,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/folders'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(creds.toJson()),
+    );
+    final json = _decode(response) as List;
+    return json
+        .map(
+          (item) => MailFolder(
+            name: item['name'] as String,
+            path: item['path'] as String,
+          ),
+        )
+        .toList();
+  }
+
+  static Future<BackendMailPage> fetchImapMessages({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    int pageSize = 20,
+    int? cursorSeq,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/messages'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'pageSize': pageSize,
+        if (cursorSeq != null) 'cursorSeq': cursorSeq,
+      }),
+    );
+    final json = _decode(response) as Map<String, dynamic>;
+    final messages = (json['messages'] as List).cast<String>();
+    return BackendMailPage(
+      rawMessages: messages,
+      total: json['total'] as int? ?? messages.length,
+      nextCursor:
+          json['nextCursorSeq'] != null
+              ? '${json['nextCursorSeq']}'
+              : null,
+    );
+  }
+
+  static Future<void> setImapSeen({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    required List<int> uids,
+    required bool seen,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/seen'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'uids': uids,
+        'seen': seen,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> setImapFlagged({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    required List<int> uids,
+    required bool add,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/flagged'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'uids': uids,
+        'add': add,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> moveImapMessages({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    required String targetPath,
+    required List<int> uids,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/move'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'targetPath': targetPath,
+        'uids': uids,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> deleteImapMessages({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    required List<int> uids,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/delete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'uids': uids,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> copyImapMessages({
+    required ImapCredentials creds,
+    required String mailboxPath,
+    required String targetPath,
+    required List<int> uids,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/copy'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'mailboxPath': mailboxPath,
+        'targetPath': targetPath,
+        'uids': uids,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> createImapFolder({
+    required ImapCredentials creds,
+    required String folderName,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/mail/imap/folders/create'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        ...creds.toJson(),
+        'folderName': folderName,
+      }),
+    );
+    _ensureSuccess(response);
   }
 
   static Map<String, String> _authHeaders(String sessionToken) => {

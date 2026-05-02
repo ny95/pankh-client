@@ -101,7 +101,10 @@ String formatDuration(Duration duration) {
   return "$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
 }
 
-DecorationImage? getBackgroundDecoration(ThemeProvider themeProvider) {
+DecorationImage? getBackgroundDecoration(
+  BuildContext context,
+  ThemeProvider themeProvider,
+) {
   if (themeProvider.bgImg.isEmpty) return null;
   String cKey = 'custom::';
   bool isCustomBg = themeProvider.bgImg.startsWith(cKey);
@@ -114,8 +117,24 @@ DecorationImage? getBackgroundDecoration(ThemeProvider themeProvider) {
         isCustomBg
             ? FileImage(File(themeProvider.bgImg.replaceFirst(cKey, '')))
             : AssetImage(
-              'assets/images/${themeProvider.bgImg.replaceAll('thumbnail-', "")}',
+              responsiveBackgroundAsset(context, themeProvider.bgImg),
             ),
     fit: BoxFit.cover,
   );
+}
+
+String responsiveBackgroundAsset(BuildContext context, String bgImg) {
+  final fileName = bgImg.replaceAll('thumbnail-', '');
+  final screenWidth = MediaQuery.sizeOf(context).width;
+  final targetWidth = screenWidth * MediaQuery.devicePixelRatioOf(context);
+  final bucket =
+      targetWidth <= 480
+          ? 480
+          : targetWidth <= 960
+          ? 960
+          : targetWidth <= 1440
+          ? 1440
+          : 1920;
+
+  return 'assets/images/bg/$bucket/$fileName';
 }
