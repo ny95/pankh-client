@@ -102,6 +102,7 @@ class AccountListState extends State<AccountList>
     final isSmallScreen = MediaQuery.of(context).size.width < 900;
 
     return Container(
+      key: ValueKey(account.email),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade300, width: 1.0),

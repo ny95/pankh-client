@@ -120,13 +120,8 @@ class _ComposeEmail extends State<ComposeEmail> {
       document: quill.Document()..insert(0, initialBody),
       selection: const TextSelection.collapsed(offset: 0),
     );
-    _quillController.addListener(() {
-      final plain = _quillController.document.toPlainText().trimRight();
-      final isHtml = settings.composeHtml;
-      option['isHtml'] = isHtml;
-      option['body'] = isHtml ? _toSimpleHtml(plain) : plain;
-      _scheduleDraftSave();
-    });
+    // Only schedule the save — body extraction happens lazily inside _saveDraft
+    _quillController.addListener(_scheduleDraftSave);
     widget.controller?._bind(
       saveDraft: saveDraftNow,
       hasContent: _hasDraftContent,
@@ -301,11 +296,19 @@ class _ComposeEmail extends State<ComposeEmail> {
 
   Future<void> _saveDraft() async {
     final accountKey = username ?? 'local';
+    // Compute body lazily here rather than on every keystroke in the listener
+    final settings = context.read<SettingsProvider>();
+    final isHtml = settings.composeHtml;
+    final plain = _quillController.document.toPlainText().trimRight();
+    final body = isHtml ? _toSimpleHtml(plain) : plain;
+    option['isHtml'] = isHtml;
+    option['body'] = body;
+
     if ((to.isEmpty) &&
         (option['cc'] ?? '').toString().trim().isEmpty &&
         (option['bcc'] ?? '').toString().trim().isEmpty &&
         (option['subject'] ?? '').toString().trim().isEmpty &&
-        (option['body'] ?? '').toString().trim().isEmpty) {
+        body.trim().isEmpty) {
       return;
     }
     final draft = <String, dynamic>{
@@ -316,7 +319,7 @@ class _ComposeEmail extends State<ComposeEmail> {
       'cc': option['cc'] ?? '',
       'bcc': option['bcc'] ?? '',
       'subject': option['subject'] ?? '',
-      'body': option['body'] ?? '',
+      'body': body,
       'attachments': List<String>.from(_attachments),
     };
     final fingerprint = [
@@ -400,66 +403,70 @@ class _ComposeEmail extends State<ComposeEmail> {
   Future<void> _insertLink() async {
     final urlController = TextEditingController();
     final textController = TextEditingController();
-    final selection = await showDialog<Map<String, String>?>(
-      context: context,
-      builder:
-          (context) => WebPointerInterceptor(
-            child: AlertDialog(
-              title: const Text('Insert link'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: urlController,
-                    decoration: const InputDecoration(labelText: 'URL'),
-                  ),
-                  TextField(
-                    controller: textController,
-                    decoration: const InputDecoration(
-                      labelText: 'Text (optional)',
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+    try {
+      final selection = await showDialog<Map<String, String>?>(
+        context: context,
+        builder: (context) => WebPointerInterceptor(
+          child: AlertDialog(
+            title: const Text('Insert link'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(labelText: 'URL'),
                 ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'url': urlController.text.trim(),
-                      'text': textController.text.trim(),
-                    });
-                  },
-                  child: const Text('Insert'),
+                TextField(
+                  controller: textController,
+                  decoration: const InputDecoration(
+                    labelText: 'Text (optional)',
+                  ),
                 ),
               ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, {
+                    'url': urlController.text.trim(),
+                    'text': textController.text.trim(),
+                  });
+                },
+                child: const Text('Insert'),
+              ),
+            ],
           ),
-    );
-    if (selection == null) return;
-    final url = selection['url'] ?? '';
-    if (url.isEmpty) return;
-    final text = selection['text'] ?? '';
-    final current = _quillController.selection;
-    final length = current.end - current.start;
-    if (length > 0) {
-      _quillController.formatSelection(quill.LinkAttribute(url));
-    } else {
-      final insertText = text.isEmpty ? url : text;
-      _quillController.replaceText(
-        current.start,
-        0,
-        insertText,
-        TextSelection.collapsed(offset: current.start + insertText.length),
+        ),
       );
-      _quillController.formatText(
-        current.start,
-        insertText.length,
-        quill.LinkAttribute(url),
-      );
+      if (selection == null) return;
+      final url = selection['url'] ?? '';
+      if (url.isEmpty) return;
+      final text = selection['text'] ?? '';
+      final current = _quillController.selection;
+      final length = current.end - current.start;
+      if (length > 0) {
+        _quillController.formatSelection(quill.LinkAttribute(url));
+      } else {
+        final insertText = text.isEmpty ? url : text;
+        _quillController.replaceText(
+          current.start,
+          0,
+          insertText,
+          TextSelection.collapsed(offset: current.start + insertText.length),
+        );
+        _quillController.formatText(
+          current.start,
+          insertText.length,
+          quill.LinkAttribute(url),
+        );
+      }
+    } finally {
+      urlController.dispose();
+      textController.dispose();
     }
   }
 
@@ -689,10 +696,8 @@ class _ComposeEmail extends State<ComposeEmail> {
                         child: TextField(
                           controller: _toController,
                           onChanged: (value) {
-                            setState(() {
-                              to = value;
-                              option['to'] = value;
-                            });
+                            to = value;
+                            option['to'] = value;
                             _scheduleDraftSave();
                           },
                           onEditingComplete: _scheduleDraftSave,
@@ -759,9 +764,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                                     child: TextField(
                                       controller: _ccController,
                                       onChanged: (value) {
-                                        setState(() {
-                                          option['cc'] = value;
-                                        });
+                                        option['cc'] = value;
                                         _scheduleDraftSave();
                                       },
                                       onEditingComplete: _scheduleDraftSave,
@@ -796,9 +799,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                                     child: TextField(
                                       controller: _bccController,
                                       onChanged: (value) {
-                                        setState(() {
-                                          option['bcc'] = value;
-                                        });
+                                        option['bcc'] = value;
                                         _scheduleDraftSave();
                                       },
                                       onEditingComplete: _scheduleDraftSave,
@@ -829,9 +830,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                         child: TextField(
                           controller: _subjectController,
                           onChanged: (value) {
-                            setState(() {
-                              option['subject'] = value;
-                            });
+                            option['subject'] = value;
                             _scheduleDraftSave();
                             widget.onSubjectChanged?.call(value);
                           },

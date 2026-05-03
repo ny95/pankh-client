@@ -35,11 +35,11 @@ class EmailListViewState extends State<EmailListView> {
 
   @override
   Widget build(BuildContext context) {
-    final commonProvider = Provider.of<CommonProvider>(context);
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final panePreviewRight = layoutProvider.layout == 'pane_preview_right';
-    final panePreviewBottom = layoutProvider.layout == 'pane_preview_bottom';
+    final isSmallScreen = context.select<CommonProvider, bool>((p) => p.isSmallScreen);
+    final layout = context.select<LayoutProvider, String?>((p) => p.layout);
+    final authProvider = context.read<AuthProvider>();
+    final panePreviewRight = layout == 'pane_preview_right';
+    final panePreviewBottom = layout == 'pane_preview_bottom';
 
     return Consumer<MailProvider>(
       builder: (context, mailProvider, _) {
@@ -120,7 +120,7 @@ class EmailListViewState extends State<EmailListView> {
                 height: listHeight,
                 width: listWidth,
                 decoration:
-                    !commonProvider.isSmallScreen && panePreviewRight
+                    !isSmallScreen && panePreviewRight
                         ? BoxDecoration(
                             border: Border(
                               right: BorderSide(
@@ -140,77 +140,53 @@ class EmailListViewState extends State<EmailListView> {
                         : null,
                 child: NotificationListener<ScrollNotification>(
                   onNotification: (notification) {
-                    if (!commonProvider.isSmallScreen) return false;
-                    if (notification is OverscrollNotification) {
-                      final metrics = notification.metrics;
-                      final atTop = metrics.extentBefore == 0;
-                      final atBottom = metrics.extentAfter == 0;
-                      if (notification.overscroll < 0 &&
-                          atTop &&
-                          !_topTriggered &&
-                          !mailProvider.isRefreshing) {
+                    if (!isSmallScreen) return false;
+                    final metrics = notification.metrics;
+
+                    // Reset triggers when scrolled away from edges
+                    if (notification is ScrollUpdateNotification ||
+                        notification is ScrollEndNotification) {
+                      if (metrics.extentBefore > 0) _topTriggered = false;
+                      if (metrics.extentAfter > 0) _bottomTriggered = false;
+                    }
+                    if (notification is UserScrollNotification &&
+                        notification.direction == ScrollDirection.idle) {
+                      _topTriggered = false;
+                      _bottomTriggered = false;
+                      return false;
+                    }
+
+                    // Top edge — load newer
+                    if (metrics.extentBefore == 0 &&
+                        !_topTriggered &&
+                        !mailProvider.isRefreshing) {
+                      final trigger = (notification is OverscrollNotification &&
+                              notification.overscroll < 0) ||
+                          (notification is ScrollUpdateNotification &&
+                              metrics.pixels <= 0) ||
+                          (notification is UserScrollNotification &&
+                              notification.direction == ScrollDirection.forward);
+                      if (trigger) {
                         _topTriggered = true;
                         mailProvider.loadNewer();
                       }
-                      if (notification.overscroll > 0 &&
-                          atBottom &&
-                          !_bottomTriggered &&
-                          !mailProvider.isLoadingMore) {
+                    }
+
+                    // Bottom edge — load older
+                    if (metrics.extentAfter == 0 &&
+                        !_bottomTriggered &&
+                        !mailProvider.isLoadingMore) {
+                      final trigger = (notification is OverscrollNotification &&
+                              notification.overscroll > 0) ||
+                          (notification is UserScrollNotification &&
+                              notification.direction == ScrollDirection.reverse) ||
+                          notification is ScrollEndNotification;
+                      if (trigger) {
                         _bottomTriggered = true;
                         mailProvider.loadOlder();
                       }
                     }
-                    if (notification is ScrollUpdateNotification) {
-                      final metrics = notification.metrics;
-                      if (metrics.pixels <= 0 &&
-                          !_topTriggered &&
-                          !mailProvider.isRefreshing) {
-                        _topTriggered = true;
-                        mailProvider.loadNewer();
-                      }
-                    }
-                    if (notification is UserScrollNotification) {
-                      final metrics = notification.metrics;
-                      final atBottom = metrics.extentAfter == 0;
-                      final direction = notification.direction;
-                      if (direction == ScrollDirection.forward &&
-                          metrics.extentBefore == 0 &&
-                          !_topTriggered &&
-                          !mailProvider.isRefreshing) {
-                        _topTriggered = true;
-                        mailProvider.loadNewer();
-                      }
-                      if (direction == ScrollDirection.reverse &&
-                          atBottom &&
-                          !_bottomTriggered &&
-                          !mailProvider.isLoadingMore) {
-                        _bottomTriggered = true;
-                        mailProvider.loadOlder();
-                      }
-                      if (direction == ScrollDirection.idle) {
-                        _bottomTriggered = false;
-                        _topTriggered = false;
-                      }
-                    }
-                    if (notification is ScrollEndNotification) {
-                      final metrics = notification.metrics;
-                      final atBottom = metrics.extentAfter == 0;
-                      if (atBottom &&
-                          !_bottomTriggered &&
-                          !mailProvider.isLoadingMore) {
-                        _bottomTriggered = true;
-                        mailProvider.loadOlder();
-                      }
-                    }
-                    if (notification is ScrollEndNotification ||
-                        notification is ScrollUpdateNotification) {
-                      if (notification.metrics.extentBefore > 0) {
-                        _topTriggered = false;
-                      }
-                      if (notification.metrics.extentAfter > 0) {
-                        _bottomTriggered = false;
-                      }
-                    }
+
                     return false;
                   },
                   child: ScrollConfiguration(
@@ -222,7 +198,11 @@ class EmailListViewState extends State<EmailListView> {
                       ),
                       itemCount: mails.length,
                       itemBuilder: (context, index) {
-                        return EmailListItem(message: mails[index]);
+                        final mail = mails[index];
+                        return EmailListItem(
+                          key: ValueKey(mail.uid ?? mail.sequenceId ?? index),
+                          message: mail,
+                        );
                       },
                     ),
                   ),

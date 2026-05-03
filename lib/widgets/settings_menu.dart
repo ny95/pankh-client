@@ -26,8 +26,8 @@ class SettingsMenu extends StatefulWidget {
 
 class SettingsMenuState extends State<SettingsMenu> {
   late String selectedReadingPane;
-  late String selectedInboxType;
   late String currentBackground;
+  late final List<String> _bgImgFirst9;
   bool settingCard = true;
   final ValueNotifier<bool> _isFullScreenCloseButtonNotifier =
       ValueNotifier<bool>(true);
@@ -109,15 +109,11 @@ class SettingsMenuState extends State<SettingsMenu> {
   void initState() {
     super.initState();
     final layoutProvider = Provider.of<LayoutProvider>(context, listen: false);
-    final inboxTypeProvider = Provider.of<InboxTypeProvider>(
-      context,
-      listen: false,
-    );
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
     selectedReadingPane = layoutProvider.layout;
-    selectedInboxType = inboxTypeProvider.inboxType;
     currentBackground = themeProvider.theme;
+    _bgImgFirst9 = bgImgList.sublist(0, 9);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _precacheAll();
@@ -192,7 +188,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                     onPressed: () => _pickImage(context),
                     child: Text('My photos'),
                   ),
-                  SizedBox(width: 50, height: 50,),
+                  const SizedBox(width: 50, height: 50),
                 ],
               ),
             ],
@@ -249,11 +245,11 @@ class SettingsMenuState extends State<SettingsMenu> {
                 isScrollable: true,
                 dividerColor: Colors.black12,
                 tabs: [
-                  Tab(icon: Icon(Icons.account_circle), text: 'Account'),
-                  Tab(icon: Icon(Icons.mail), text: 'Composition'),
-                  Tab(icon: Icon(Icons.notifications), text: 'Notifications'),
-                  Tab(icon: Icon(Icons.security), text: 'Security'),
-                  Tab(icon: Icon(Icons.extension), text: 'Extensions'),
+                  const Tab(icon: Icon(Icons.account_circle), text: 'Account'),
+                  const Tab(icon: Icon(Icons.mail), text: 'Composition'),
+                  const Tab(icon: Icon(Icons.notifications), text: 'Notifications'),
+                  const Tab(icon: Icon(Icons.security), text: 'Security'),
+                  const Tab(icon: Icon(Icons.extension), text: 'Extensions'),
                 ],
               ),
             ),
@@ -306,7 +302,10 @@ class SettingsMenuState extends State<SettingsMenu> {
     }
   }
 
-  Widget setReadingPane({required LayoutProvider layoutProvider}) {
+  Widget setReadingPane({
+    required LayoutProvider layoutProvider,
+    required bool isCompact,
+  }) {
     return RadioGroup<String>(
       groupValue: layoutProvider.layout,
       onChanged: (value) {
@@ -314,238 +313,160 @@ class SettingsMenuState extends State<SettingsMenu> {
         layoutProvider.setLayout(value);
       },
       child: Column(
-        children:
-            readingPanes
-                .map(
-                  (pane) => Row(
+        children: readingPanes.map((pane) {
+          final radio = SizedBox(
+            width: 40,
+            height: 50,
+            child: Center(child: RadioListTile(value: pane['value'])),
+          );
+          final preview = Container(
+            width: 70,
+            height: 50,
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/${pane['img']}"),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: isCompact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final isCompact = constraints.maxWidth < 220;
-                              final label = Expanded(
-                                child: Text(
-                                  pane["label"],
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              );
-                              final radio = SizedBox(
-                                width: 40,
-                                height: 50,
-                                child: Center(
-                                  child: RadioListTile(
-                                    value: pane['value'],
-                                  ),
-                                ),
-                              );
-                              final preview = Container(
-                                width: 70,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  image: DecorationImage(
-                                    image: AssetImage(
-                                      "assets/images/${pane['img']}",
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                              if (isCompact) {
-                                final compactLabel = ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 140,
-                                  ),
-                                  child: Text(
-                                    pane["label"],
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                );
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          radio,
-                                          const SizedBox(width: 6),
-                                          compactLabel,
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    preview,
-                                  ],
-                                );
-                              }
-                              return Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.start,
-                                      children: [
-                                        radio,
-                                        label,
-                                      ],
-                                    ),
-                                  ),
-                                  preview,
-                                ],
-                              );
-                            },
-                          ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            radio,
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 140),
+                              child: Text(
+                                pane["label"],
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      preview,
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            radio,
+                            Expanded(
+                              child: Text(
+                                pane["label"],
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      preview,
                     ],
                   ),
-                )
-                .toList(),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget setInboxType({required InboxTypeProvider inboxTypeProvider}) {
+  Widget setInboxType({
+    required InboxTypeProvider inboxTypeProvider,
+    required bool isCompact,
+  }) {
     return RadioGroup<String>(
-      groupValue: selectedInboxType,
+      groupValue: inboxTypeProvider.inboxType,
       onChanged: (value) {
         if (value == null) return;
-        setState(() {
-          selectedInboxType = value;
-          inboxTypeProvider.setInboxType(value);
-        });
+        inboxTypeProvider.setInboxType(value);
       },
       child: Column(
-        children:
-            inboxTypes
-                .map(
-                  (pane) => Row(
+        children: inboxTypes.map((pane) {
+          final labelColumn = Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(pane["label"], overflow: TextOverflow.ellipsis),
+              if (pane["customization"] == true)
+                GestureDetector(
+                  onTap: () {},
+                  child: const Text(
+                    "Customize",
+                    style: TextStyle(color: Colors.blue),
+                  ),
+                ),
+            ],
+          );
+          final radio = SizedBox(
+            width: 40,
+            height: 50,
+            child: Center(child: RadioListTile(value: pane['value'])),
+          );
+          final preview = Container(
+            width: 70,
+            height: 50,
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/${pane['img']}"),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: isCompact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final isCompact = constraints.maxWidth < 220;
-                              final label = Flexible(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      pane["label"],
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (pane["customization"])
-                                      GestureDetector(
-                                        onTap: () {},
-                                        child: const Text(
-                                          "Customize",
-                                          style: TextStyle(
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              );
-                              final radio = SizedBox(
-                                width: 40,
-                                height: 50,
-                                child: Center(
-                                  child: RadioListTile(
-                                    value: pane['value'],
-                                  ),
-                                ),
-                              );
-                              final preview = Container(
-                                width: 70,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  image: DecorationImage(
-                                    image: AssetImage(
-                                      "assets/images/${pane['img']}",
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                              if (isCompact) {
-                                final compactLabel = ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 140,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        pane["label"],
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (pane["customization"])
-                                        GestureDetector(
-                                          onTap: () {},
-                                          child: const Text(
-                                            "Customize",
-                                            style: TextStyle(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          radio,
-                                          const SizedBox(width: 6),
-                                          compactLabel,
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    preview,
-                                  ],
-                                );
-                              }
-                              return Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        radio,
-                                        label,
-                                      ],
-                                    ),
-                                  ),
-                                  preview,
-                                ],
-                              );
-                            },
-                          ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            radio,
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 140),
+                              child: labelColumn,
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      preview,
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            radio,
+                            Flexible(child: labelColumn),
+                          ],
+                        ),
+                      ),
+                      preview,
                     ],
                   ),
-                )
-                .toList(),
+          );
+        }).toList(),
       ),
     );
   }
@@ -567,7 +488,7 @@ class SettingsMenuState extends State<SettingsMenu> {
     final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
     final layoutProvider = Provider.of<LayoutProvider>(context);
     final inboxTypeProvider = Provider.of<InboxTypeProvider>(context);
-    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
 
 
     return Container(
@@ -726,7 +647,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: bgImgList.sublist(0, 9).map((img) =>
+                                  children: _bgImgFirst9.map((img) =>
                                     _ThumbItem(
                                       img: img,
                                       width: 78.65,
@@ -748,16 +669,30 @@ class SettingsMenuState extends State<SettingsMenu> {
                                   'Reading Pane',
                                   style: TextStyle(fontSize: 16),
                                 ),
-                                setReadingPane(
-                                  layoutProvider: layoutProvider,
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  'Inbox Type',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                                setInboxType(
-                                  inboxTypeProvider: inboxTypeProvider,
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final isCompact =
+                                        constraints.maxWidth < 220;
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        setReadingPane(
+                                          layoutProvider: layoutProvider,
+                                          isCompact: isCompact,
+                                        ),
+                                        const SizedBox(height: 20),
+                                        const Text(
+                                          'Inbox Type',
+                                          style: TextStyle(fontSize: 16),
+                                        ),
+                                        setInboxType(
+                                          inboxTypeProvider: inboxTypeProvider,
+                                          isCompact: isCompact,
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -802,12 +737,12 @@ class SettingsMenuState extends State<SettingsMenu> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Flexible(
+                            const Flexible(
                               flex: 2,
                               child: Icon(Icons.settings, size: 20),
                             ),
-                            Flexible(flex: 2, child: SizedBox(width: 10)),
-                            Flexible(
+                            const Flexible(flex: 2, child: SizedBox(width: 10)),
+                            const Flexible(
                               flex: 8,
                               child: Text(
                                 'See all settings',

@@ -10,10 +10,10 @@ class LayoutProvider with ChangeNotifier {
 
   String get layout => _layout;
 
-  void setLayout(String layout) async {
+  Future<void> setLayout(String layout) async {
     _layout = layout;
-    await HiveStorage.putValue(key: "layout", value: layout);
     notifyListeners();
+    await HiveStorage.putValue(key: "layout", value: layout);
   }
 
   void _loadLayout() {

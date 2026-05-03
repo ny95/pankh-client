@@ -677,7 +677,8 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
+    final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
     final mailProvider = Provider.of<MailProvider>(context, listen: false);
     var size = MediaQuery.of(context).size;
     bool isSmallScreen = size.width < 800;
@@ -703,7 +704,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                         onPressed: widget.toggleMenu,
                         icon: const Icon(Icons.menu),
                       ),
-                      SizedBox(width: 40),
+                      const SizedBox(width: 40),
                       Flexible(
                         child: Image.asset(
                           'assets/logos/pankh-2d.png',
@@ -756,11 +757,11 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: Blur(
-                            blur: themeProvider.bgBlur,
+                            blur: bgBlur,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Theme.of(context).cardColor.withValues(
-                                  alpha: themeProvider.bgOpacity,
+                                  alpha: bgOpacity,
                                 ),
                                 borderRadius: BorderRadius.circular(50),
                               ),
@@ -790,11 +791,9 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                 },
                                 leading: Tooltip(
                                   message: 'Toggle Menu',
-                                  child: Consumer<MailProvider>(
-                                    builder: (context, provider, _) {
-                                      final showLoader =
-                                          provider.isSearchMode &&
-                                          provider.isLoading;
+                                  child: Selector<MailProvider, bool>(
+                                    selector: (_, p) => p.isSearchMode && p.isLoading,
+                                    builder: (context, showLoader, _) {
                                       if (showLoader) {
                                         return const SizedBox(
                                           width: 36,

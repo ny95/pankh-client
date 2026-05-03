@@ -30,6 +30,7 @@ class MailProvider with ChangeNotifier {
   bool? _imapSecure;
   final int _pageSize = 20;
   List<MailFolder> _folders = [];
+  List<MailFolder>? _foldersView;
   MailFolder? _selectedFolder;
   _SearchContext _searchContext = _SearchContext.none;
   String _searchQuery = '';
@@ -104,7 +105,7 @@ class MailProvider with ChangeNotifier {
   int get mailboxMessages => _mailboxMessages;
   int? get windowStartSeq => _windowStartSeq;
   int? get windowEndSeq => _windowEndSeq;
-  List<MailFolder> get folders => List.unmodifiable(_folders);
+  List<MailFolder> get folders => _foldersView ??= List.unmodifiable(_folders);
   MailFolder? get selectedFolder => _selectedFolder;
   bool get isSearchMode => _searchContext != _SearchContext.none;
   String get searchQuery => _searchQuery;
@@ -120,6 +121,7 @@ class MailProvider with ChangeNotifier {
   bool get hasAuth => _email != null && ((_password?.isNotEmpty ?? false) || _usesOauthImap || _useBackendMailApi);
   bool get needsOAuthRelogin => _needsOAuthRelogin;
   String? get authError => _authError;
+  bool get hasDraftToCompose => _draftToCompose != null;
 
   MimeMessage? takeDraftToCompose() {
     final draft = _draftToCompose;
@@ -258,6 +260,7 @@ class MailProvider with ChangeNotifier {
       _windowStartSeq = null;
       _windowEndSeq = null;
       _folders = [];
+      _foldersView = null;
       _selectedFolder = null;
       _searchContext = _SearchContext.none;
       _searchQuery = '';
@@ -692,6 +695,7 @@ class MailProvider with ChangeNotifier {
   Future<void> loadFolders() async {
     if (!_canLoadMail) {
       _folders = [];
+      _foldersView = null;
       _selectedFolder = null;
       notifyListeners();
       return;
@@ -751,6 +755,7 @@ class MailProvider with ChangeNotifier {
       return a.name.toLowerCase().compareTo(b.name.toLowerCase());
     });
     _folders = folders;
+    _foldersView = null;
     if (_folders.isNotEmpty) {
       _selectedFolder ??= _folders.firstWhere(
         (f) => f.name.toLowerCase() == 'inbox',

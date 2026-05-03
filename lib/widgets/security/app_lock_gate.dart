@@ -67,7 +67,9 @@ class _AppLockGateState extends State<AppLockGate>
       return widget.child;
     }
     if (!_locked && settings.hasPin) {
-      _locked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_locked) setState(() => _locked = true);
+      });
     }
     return Stack(
       children: [

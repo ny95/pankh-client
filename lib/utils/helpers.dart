@@ -104,21 +104,23 @@ String formatDuration(Duration duration) {
 DecorationImage? getBackgroundDecoration(
   BuildContext context,
   ThemeProvider themeProvider,
+) => getBackgroundDecorationFromImg(context, themeProvider.bgImg);
+
+DecorationImage? getBackgroundDecorationFromImg(
+  BuildContext context,
+  String bgImg,
 ) {
-  if (themeProvider.bgImg.isEmpty) return null;
-  String cKey = 'custom::';
-  bool isCustomBg = themeProvider.bgImg.startsWith(cKey);
-  if (themeProvider.bgImg.contains("l-theme-light") ||
-      themeProvider.bgImg.contains("l-theme-dark")) {
+  if (bgImg.isEmpty) return null;
+  const cKey = 'custom::';
+  final isCustomBg = bgImg.startsWith(cKey);
+  if (bgImg.contains("l-theme-light") || bgImg.contains("l-theme-dark")) {
     return null;
   }
   return DecorationImage(
     image:
         isCustomBg
-            ? FileImage(File(themeProvider.bgImg.replaceFirst(cKey, '')))
-            : AssetImage(
-              responsiveBackgroundAsset(context, themeProvider.bgImg),
-            ),
+            ? FileImage(File(bgImg.replaceFirst(cKey, '')))
+            : AssetImage(responsiveBackgroundAsset(context, bgImg)),
     fit: BoxFit.cover,
   );
 }

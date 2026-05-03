@@ -40,9 +40,10 @@ class HomeScreenState extends State<HomeScreen> {
   String? _composeInitialMessageId;
   Timer? _composeStatusTimer;
   final ComposeEmailController _composeController = ComposeEmailController();
-  final int _lastNotifiedCount = 0;
   String? _lastDraftMessageId;
   bool _sizeUpdateScheduled = false;
+  bool _draftOpenScheduled = false;
+  int _composeSessionId = 0;
   final List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
@@ -282,82 +283,65 @@ class HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final commonProvider = Provider.of<CommonProvider>(context);
-    final mailProvider = Provider.of<MailProvider>(context);
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    bool panePreviewOff = layoutProvider.layout == "pane_preview_off";
+    final (:bgOpacity, :bgBlur, :bgImg) = context.select<ThemeProvider, ({double bgOpacity, bool bgBlur, String bgImg})>(
+      (p) => (bgOpacity: p.bgOpacity, bgBlur: p.bgBlur, bgImg: p.bgImg),
+    );
+    final isSmallScreen = context.select<CommonProvider, bool>((p) => p.isSmallScreen);
+    final isMailView = context.select<CommonProvider, bool>((p) => p.isMailView);
+    final panePreviewOff = context.select<LayoutProvider, bool>((p) => p.layout == "pane_preview_off");
+    final hasDraftToCompose = context.select<MailProvider, bool>((p) => p.hasDraftToCompose);
 
-    var size = MediaQuery.of(context).size;
-    bool isSmallScreen = size.width < 800;
-    final draftToOpen = mailProvider.takeDraftToCompose();
-    if (draftToOpen != null && !isSmallScreen) {
-      final messageId = draftToOpen.getHeaderValue('Message-ID') ?? '';
-      if (_lastDraftMessageId == messageId && _composeOpen) {
-        // Already opened this draft in the current session.
-      } else {
+    final size = MediaQuery.sizeOf(context);
+    final computedIsSmallScreen = size.width < 800;
+
+    if (hasDraftToCompose && !computedIsSmallScreen && !_draftOpenScheduled) {
+      _draftOpenScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _draftOpenScheduled = false;
+        final draftToOpen = context.read<MailProvider>().takeDraftToCompose();
+        if (draftToOpen == null) return;
+        final messageId = draftToOpen.getHeaderValue('Message-ID') ?? '';
+        if (_lastDraftMessageId == messageId && _composeOpen) return;
         _lastDraftMessageId = messageId;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final to = draftToOpen.to?.map((a) => a.email).join(', ') ?? '';
-          final cc = draftToOpen.cc?.map((a) => a.email).join(', ') ?? '';
-          final bcc = draftToOpen.bcc?.map((a) => a.email).join(', ') ?? '';
-          final subject = draftToOpen.decodeSubject() ?? '';
-          final body =
-              draftToOpen.decodeTextPlainPart() ??
-              draftToOpen.decodeTextHtmlPart() ??
-              '';
-          setState(() {
-            _composeOpen = true;
-            _composeMinimized = false;
-            _composeMaximized = false;
-            _composeSubject = subject;
-            _composeStatus = '';
-            _composeInitialTo = to;
-            _composeInitialCc = cc;
-            _composeInitialBcc = bcc;
-            _composeInitialSubject = subject;
-            _composeInitialBody = body;
-            _composeInitialMessageId = messageId;
-          });
+        final to = draftToOpen.to?.map((a) => a.email).join(', ') ?? '';
+        final cc = draftToOpen.cc?.map((a) => a.email).join(', ') ?? '';
+        final bcc = draftToOpen.bcc?.map((a) => a.email).join(', ') ?? '';
+        final subject = draftToOpen.decodeSubject() ?? '';
+        final body =
+            draftToOpen.decodeTextPlainPart() ??
+            draftToOpen.decodeTextHtmlPart() ??
+            '';
+        setState(() {
+          _composeOpen = true;
+          _composeMinimized = false;
+          _composeMaximized = false;
+          _composeSubject = subject;
+          _composeStatus = '';
+          _composeInitialTo = to;
+          _composeInitialCc = cc;
+          _composeInitialBcc = bcc;
+          _composeInitialSubject = subject;
+          _composeInitialBody = body;
+          _composeInitialMessageId = messageId;
+          _composeSessionId++;
         });
-      }
+      });
     }
-    if (commonProvider.isSmallScreen != isSmallScreen) {
+    if (isSmallScreen != computedIsSmallScreen) {
       if (!_sizeUpdateScheduled) {
         _sizeUpdateScheduled = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _sizeUpdateScheduled = false;
-          commonProvider.setIsSmallScreen(isSmallScreen: isSmallScreen);
-          if (isSmallScreen && commonProvider.isMailView) {
-            commonProvider.setIsMailView(isMailView: false);
+          final cp = context.read<CommonProvider>();
+          cp.setIsSmallScreen(isSmallScreen: computedIsSmallScreen);
+          if (computedIsSmallScreen && isMailView) {
+            cp.setIsMailView(isMailView: false);
           }
         });
       }
     }
-    // if (mailProvider.newMailCount > 0 &&
-    //     mailProvider.newMailCount != _lastNotifiedCount &&
-    //     mounted) {
-    //   _lastNotifiedCount = mailProvider.newMailCount;
-    //   WidgetsBinding.instance.addPostFrameCallback((_) {
-    //     if (!mounted) return;
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       SnackBar(
-    //         content: Text(
-    //           'You have ${mailProvider.newMailCount} new email(s).',
-    //         ),
-    //         action: SnackBarAction(
-    //           label: 'Refresh',
-    //           onPressed: () {
-    //             mailProvider.refreshNewer();
-    //             mailProvider.clearNewMailCount();
-    //           },
-    //         ),
-    //       ),
-    //     );
-    //   });
-    // }
 
     return Builder(
       builder:
@@ -411,7 +395,7 @@ class HomeScreenState extends State<HomeScreen> {
             body: Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).canvasColor,
-                image: getBackgroundDecoration(context, themeProvider),
+                image: getBackgroundDecorationFromImg(context, bgImg),
               ),
               child: SafeArea(
                 child: Stack(
@@ -456,6 +440,7 @@ class HomeScreenState extends State<HomeScreen> {
                                         _composeInitialSubject = null;
                                         _composeInitialBody = null;
                                         _composeInitialMessageId = null;
+                                        _composeSessionId++;
                                       });
                                     },
                                     onOpenHelp: () => _openHelp(context, false),
@@ -471,16 +456,16 @@ class HomeScreenState extends State<HomeScreen> {
                                     color: Theme.of(
                                       context,
                                     ).cardColor.withValues(
-                                      alpha: themeProvider.bgOpacity,
+                                      alpha: bgOpacity,
                                     ),
                                   ),
                                   clipBehavior: Clip.antiAlias,
                                   child: Blur(
-                                    blur: themeProvider.bgBlur,
+                                    blur: bgBlur,
                                     child: Column(
                                       children: [
                                         if (!(panePreviewOff &&
-                                      commonProvider.isMailView) &&
+                                      isMailView) &&
                                   !isSmallScreen) MailNav(),
                                         Expanded(child: MailListContainer()),
                                       ],
@@ -513,6 +498,7 @@ class HomeScreenState extends State<HomeScreen> {
                         minimized: _composeMinimized,
                         maximized: _composeMaximized,
                         subject: _composeSubject,
+                        sessionId: _composeSessionId,
                         onClose: () {
                           unawaited(_saveDraftIfNeeded(showSnackOnClose: true));
                           setState(() {
@@ -584,6 +570,7 @@ class _ComposeWindow extends StatelessWidget {
   final String? initialSubject;
   final String? initialBody;
   final String? initialMessageId;
+  final int sessionId;
   final VoidCallback onClose;
   final VoidCallback onMinimize;
   final VoidCallback onToggleMaximize;
@@ -603,6 +590,7 @@ class _ComposeWindow extends StatelessWidget {
     this.initialSubject,
     this.initialBody,
     this.initialMessageId,
+    required this.sessionId,
     required this.onClose,
     required this.onMinimize,
     required this.onToggleMaximize,
@@ -673,7 +661,7 @@ class _ComposeWindow extends StatelessWidget {
             : headerContent;
 
     final compose = ComposeEmail(
-      key: ValueKey(initialMessageId ?? 'new_message'),
+      key: ValueKey(initialMessageId ?? 'new_$sessionId'),
       embedded: true,
       onSubjectChanged: onSubjectChanged,
       controller: controller,

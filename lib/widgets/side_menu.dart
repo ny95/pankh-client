@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 
+import '../models/mail_folder.dart';
 import '../providers/mail_provider.dart';
 import '../providers/theme_provider.dart';
 import 'blur.dart';
@@ -179,13 +180,16 @@ class SideMenuList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final mailProvider = Provider.of<MailProvider>(context);
-    double opacity = 1;
-    final size = MediaQuery.of(context).size;
+    final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
+    final (folders, selectedFolderPath) =
+        context.select<MailProvider, (List<MailFolder>, String?)>(
+      (p) => (p.folders, p.selectedFolder?.path),
+    );
+    final size = MediaQuery.sizeOf(context);
     final isSmallScreen = size.width < 800;
-    final folders = mailProvider.folders;
-    final selectedFolder = mailProvider.selectedFolder;
+    final folderIcons = {
+      for (final f in folders) f.path: _folderIcon(f.name),
+    };
     return ListView(
       children: [
         if (!isSmallScreen)
@@ -193,7 +197,7 @@ class SideMenuList extends StatelessWidget {
             height: 65,
             margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor.withValues(alpha: opacity),
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(15.0),
               boxShadow: [
                 BoxShadow(
@@ -206,7 +210,7 @@ class SideMenuList extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: Blur(
-              blur: themeProvider.bgBlur,
+              blur: bgBlur,
               child: TextButton(
                 style: ButtonStyle(
                   shape: WidgetStateProperty.all<RoundedRectangleBorder>(
@@ -248,7 +252,7 @@ class SideMenuList extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(!isSmallScreen ? 15.0 : 0.0),
             // color: const Color(0xFF232b23),
-            color: Theme.of(context).cardColor.withValues(alpha: opacity),
+            color: Theme.of(context).cardColor,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.2),
@@ -260,7 +264,7 @@ class SideMenuList extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: Blur(
-            blur: themeProvider.bgBlur,
+            blur: bgBlur,
             child: ListView(
               scrollDirection: Axis.vertical,
               children: [
@@ -288,8 +292,7 @@ class SideMenuList extends StatelessWidget {
                   ),
                 if (folders.isNotEmpty)
                   ...folders.map((folder) {
-                    final isSelected =
-                        selectedFolder?.path == folder.path;
+                    final isSelected = selectedFolderPath == folder.path;
                     return Container(
                       color:
                           isSelected
@@ -301,10 +304,10 @@ class SideMenuList extends StatelessWidget {
                         context: context,
                         width: width,
                         isSmallScreen: isSmallScreen,
-                        icon: _folderIcon(folder.name),
+                        icon: folderIcons[folder.path],
                         label: folder.name,
                         onTap: () {
-                          mailProvider.selectFolder(folder);
+                          context.read<MailProvider>().selectFolder(folder);
                         },
                       ),
                     );

@@ -16,6 +16,7 @@ class MailListContainer extends StatefulWidget {
 
 class _MailListContainerState extends State<MailListContainer> {
   double _splitRatio = 0.3;
+  bool _autoSelectScheduled = false;
 
   void _updateRatio(double delta, double total) {
     if (total <= 0) return;
@@ -26,14 +27,17 @@ class _MailListContainerState extends State<MailListContainer> {
 
   @override
   Widget build(BuildContext context) {
-    final commonProvider = Provider.of<CommonProvider>(context);
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    final mailProvider = Provider.of<MailProvider>(context);
-    bool panePreviewBottom = layoutProvider.layout == "pane_preview_bottom";
-    bool panePreviewRight = layoutProvider.layout == "pane_preview_right";
+    final isSmallScreen = context.select<CommonProvider, bool>((p) => p.isSmallScreen);
+    final isMailView = context.select<CommonProvider, bool>((p) => p.isMailView);
+    final layout = context.select<LayoutProvider, String?>((p) => p.layout);
+    final (mailSelected, mailsEmpty) = context.select<MailProvider, (bool, bool)>(
+      (p) => (p.selectedMail != null, p.mails.isEmpty),
+    );
+    final bool panePreviewBottom = layout == "pane_preview_bottom";
+    final bool panePreviewRight = layout == "pane_preview_right";
     return Container(
       padding: EdgeInsets.symmetric(
-        vertical: commonProvider.isSmallScreen ? 8 : 0,
+        vertical: isSmallScreen ? 8 : 0,
       ),
       decoration: BoxDecoration(
         border: Border(
@@ -45,18 +49,18 @@ class _MailListContainerState extends State<MailListContainer> {
           final double parentWidth = constraints.maxWidth;
           final double parentHeight = constraints.maxHeight;
           final bool showPreview =
-              !commonProvider.isSmallScreen &&
-              (commonProvider.isMailView ||
-                  panePreviewRight ||
-                  panePreviewBottom);
+              !isSmallScreen && (isMailView || panePreviewRight || panePreviewBottom);
           if ((panePreviewRight || panePreviewBottom) &&
               showPreview &&
-              mailProvider.selectedMail == null &&
-              mailProvider.mails.isNotEmpty) {
+              !mailSelected &&
+              !mailsEmpty &&
+              !_autoSelectScheduled) {
+            _autoSelectScheduled = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mailProvider.selectedMail == null &&
-                  mailProvider.mails.isNotEmpty) {
-                mailProvider.selectMail(mailProvider.mails.first);
+              _autoSelectScheduled = false;
+              final mp = context.read<MailProvider>();
+              if (mp.selectedMail == null && mp.mails.isNotEmpty) {
+                mp.selectMail(mp.mails.first);
               }
             });
           }
@@ -153,7 +157,7 @@ class _MailListContainerState extends State<MailListContainer> {
             );
           }
 
-          if (showPreview && commonProvider.isMailView) {
+          if (showPreview && isMailView) {
             return const ViewMail();
           }
 

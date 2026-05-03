@@ -1,3 +1,4 @@
+import 'package:enough_mail/enough_mail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:pankh/providers/common_provider.dart';
@@ -14,15 +15,17 @@ class ViewMail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mailProvider = Provider.of<MailProvider>(context);
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final commonProvider = Provider.of<CommonProvider>(context);
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    bool panePreviewOff = layoutProvider.layout == "pane_preview_off";
-    if (mailProvider.selectedMail == null) {
-      if (mailProvider.isLoading ||
-          mailProvider.isRefreshing ||
-          mailProvider.mails.isEmpty) {
+    final isSmallScreen = context.select<CommonProvider, bool>((p) => p.isSmallScreen);
+    final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
+    final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
+    final panePreviewOff = context.select<LayoutProvider, bool>((p) => p.layout == "pane_preview_off");
+    final selectedMail = context.select<MailProvider, MimeMessage?>((p) => p.selectedMail);
+    final selectedFolderName = context.select<MailProvider, String?>((p) => p.selectedFolder?.name);
+    final isLoading = context.select<MailProvider, bool>((p) => p.isLoading);
+    final isRefreshing = context.select<MailProvider, bool>((p) => p.isRefreshing);
+    final mailsEmpty = context.select<MailProvider, bool>((p) => p.mails.isEmpty);
+    if (selectedMail == null) {
+      if (isLoading || isRefreshing || mailsEmpty) {
         return const Center(
           child: SizedBox(
             width: 28,
@@ -34,11 +37,11 @@ class ViewMail extends StatelessWidget {
       return const Center(child: Text("Select an email"));
     }
 
-    final message = mailProvider.selectedMail!;
+    final message = selectedMail;
     final plainText = message.decodeTextPlainPart();
     final htmlText = message.decodeTextHtmlPart();
     final content = htmlText ?? (plainText ?? '').replaceAll('\r\n', '<br>');
-    final webViewKey = ValueKey<int>(message.hashCode);
+    final webViewKey = ValueKey(message.uid ?? message.sequenceId ?? message.hashCode);
     final subject = message.decodeSubject() ?? '(no subject)';
     final from = message.from?.isNotEmpty == true ? message.from!.first : null;
     final fromName =
@@ -55,16 +58,17 @@ class ViewMail extends StatelessWidget {
           f.toLowerCase().contains('starred'),
     );
 
+    final themeProvider = context.read<ThemeProvider>();
     return Scaffold(
       backgroundColor:
-          commonProvider.isSmallScreen
+          isSmallScreen
               ? Theme.of(
                 context,
-              ).canvasColor.withValues(alpha: themeProvider.bgOpacity)
+              ).canvasColor.withValues(alpha: bgOpacity)
               : Colors.transparent,
       body: Container(
         decoration:
-            commonProvider.isSmallScreen
+            isSmallScreen
                 ? BoxDecoration(
                   image: getBackgroundDecoration(context, themeProvider),
                 )
@@ -81,16 +85,16 @@ class ViewMail extends StatelessWidget {
                 ),
         clipBehavior: Clip.antiAlias,
         child: Blur(
-          blur: themeProvider.bgBlur,
+          blur: bgBlur,
           child: SafeArea(
             child: Column(
               children: [
-                if (panePreviewOff || commonProvider.isSmallScreen)
+                if (panePreviewOff || isSmallScreen)
                   Container(
                     color:
-                        commonProvider.isSmallScreen
+                        isSmallScreen
                             ? Theme.of(context).canvasColor.withValues(
-                              alpha: themeProvider.bgOpacity,
+                              alpha: bgOpacity,
                             )
                             : null,
                     padding: const EdgeInsets.symmetric(
@@ -102,11 +106,10 @@ class ViewMail extends StatelessWidget {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (panePreviewOff &&
-                                !commonProvider.isSmallScreen) {
-                              commonProvider.setIsMailView(isMailView: false);
+                            if (panePreviewOff && !isSmallScreen) {
+                              context.read<CommonProvider>().setIsMailView(isMailView: false);
                             }
-                            if (commonProvider.isSmallScreen) {
+                            if (isSmallScreen) {
                               Navigator.pop(context);
                             }
                           },
@@ -239,8 +242,7 @@ class ViewMail extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 12),
                                       _labelChip(
-                                        label:
-                                            mailProvider.selectedFolder?.name,
+                                        label: selectedFolderName,
                                       ),
                                     ],
                                   ),
@@ -256,7 +258,7 @@ class ViewMail extends StatelessWidget {
                                               isImportant ? Colors.amber : null,
                                         ),
                                         onPressed: () {
-                                          mailProvider.toggleImportant(message);
+                                          context.read<MailProvider>().toggleImportant(message);
                                         },
                                       ),
                                       IconButton(

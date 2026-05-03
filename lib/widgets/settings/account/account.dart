@@ -533,7 +533,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           children: [
             _buildEditableField(
               label: 'Account Name:',
-              controller: TextEditingController(text: account.accountName),
+              initialValue: account.accountName,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -557,7 +557,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
           children: [
             _buildEditableField(
               label: 'Your Name:',
-              controller: TextEditingController(text: account.displayName),
+              initialValue: account.displayName,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -566,7 +566,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             ),
             _buildEditableField(
               label: 'Email Address:',
-              controller: TextEditingController(text: account.email),
+              initialValue: account.email,
               isCompact: isSmall,
               onSave:
                   (value) => ScaffoldMessenger.of(context).showSnackBar(
@@ -577,7 +577,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             ),
             _buildEditableField(
               label: 'Reply-to Address:',
-              controller: TextEditingController(text: account.replyTo),
+              initialValue: account.replyTo,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -586,7 +586,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             ),
             _buildEditableField(
               label: 'Organization:',
-              controller: TextEditingController(text: account.organization),
+              initialValue: account.organization,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -618,7 +618,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             ),
             _buildEditableField(
               label: 'Signature file:',
-              controller: TextEditingController(text: account.signatureFilePath),
+              initialValue: account.signatureFilePath,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -634,7 +634,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             ),
             _buildEditableField(
               label: 'Reply from filter:',
-              controller: TextEditingController(text: account.replyFromFilter),
+              initialValue: account.replyFromFilter,
               isCompact: isSmall,
               onSave:
                   (value) => auth.updateAccount(
@@ -663,6 +663,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     String connectionSecurity = account.smtpSecure ? 'SSL/TLS' : 'None';
     String authMethod = account.smtpAuthMethod;
 
+    try {
     await showDialog<void>(
       context: context,
       builder:
@@ -774,6 +775,12 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
             },
           ),
     );
+    } finally {
+      descriptionController.dispose();
+      hostController.dispose();
+      portController.dispose();
+      userController.dispose();
+    }
   }
 
   Widget _outgoingServerSetting(AuthProvider auth) {
@@ -1369,51 +1376,11 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     required bool isCompact,
     required ValueChanged<String> onSave,
   }) {
-    final controller = TextEditingController(text: value);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child:
-          isCompact
-              ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: controller,
-                    minLines: 3,
-                    maxLines: 6,
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.save),
-                        onPressed: () => onSave(controller.text),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-              : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: 140, child: Text(label)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 3,
-                      maxLines: 6,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.save),
-                          onPressed: () => onSave(controller.text),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return _MultilineField(
+      label: label,
+      initialValue: value,
+      isCompact: isCompact,
+      onSave: onSave,
     );
   }
 
@@ -1482,7 +1449,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     required Account account,
     required AuthProvider auth,
   }) async {
-    final palette = <String>[
+    const palette = <String>[
       '2196F3',
       '4CAF50',
       'FF9800',
@@ -1708,69 +1675,13 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     required ValueChanged<bool?> onToggle,
     required ValueChanged<int> onMinutesChanged,
   }) {
-    final controller = TextEditingController(text: minutes.toString());
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child:
-          isCompact
-              ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Checkbox(value: enabled, onChanged: onToggle),
-                      Expanded(child: Text(label)),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const SizedBox(width: 40),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                          onSubmitted: (value) {
-                            final parsed = int.tryParse(value) ?? minutes;
-                            final next = parsed.clamp(1, 120);
-                            onMinutesChanged(next);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('minutes'),
-                    ],
-                  ),
-                ],
-              )
-              : Row(
-                children: [
-                  Checkbox(value: enabled, onChanged: onToggle),
-                  Expanded(child: Text(label)),
-                  SizedBox(
-                    width: 80,
-                    child: TextField(
-                      controller: controller,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (value) {
-                        final parsed = int.tryParse(value) ?? minutes;
-                        final next = parsed.clamp(1, 120);
-                        onMinutesChanged(next);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('minutes'),
-                ],
-              ),
+    return _IntervalRow(
+      label: label,
+      minutes: minutes,
+      enabled: enabled,
+      isCompact: isCompact,
+      onToggle: onToggle,
+      onMinutesChanged: onMinutesChanged,
     );
   }
 
@@ -1900,53 +1811,15 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
 
   Widget _buildEditableField({
     required String label,
-    required TextEditingController controller,
+    required String initialValue,
     required bool isCompact,
     required ValueChanged<String> onSave,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child:
-          isCompact
-              ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.save),
-                        onPressed: () => onSave(controller.text),
-                      ),
-                    ),
-                    onSubmitted: onSave,
-                  ),
-                ],
-              )
-              : Row(
-                children: [
-                  SizedBox(width: 140, child: Text(label)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.save),
-                          onPressed: () => onSave(controller.text),
-                        ),
-                      ),
-                      onSubmitted: onSave,
-                    ),
-                  ),
-                ],
-              ),
+    return _EditableField(
+      label: label,
+      initialValue: initialValue,
+      isCompact: isCompact,
+      onSave: onSave,
     );
   }
 
@@ -2007,3 +1880,273 @@ const List<String> _authMethodOptions = [
         ? _authMethodOptions
         : [..._authMethodOptions, current];
   }
+
+class _EditableField extends StatefulWidget {
+  final String label;
+  final String initialValue;
+  final bool isCompact;
+  final ValueChanged<String> onSave;
+
+  const _EditableField({
+    required this.label,
+    required this.initialValue,
+    required this.isCompact,
+    required this.onSave,
+  });
+
+  @override
+  State<_EditableField> createState() => _EditableFieldState();
+}
+
+class _EditableFieldState extends State<_EditableField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: widget.isCompact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.label),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _controller,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () => widget.onSave(_controller.text),
+                    ),
+                  ),
+                  onSubmitted: widget.onSave,
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                SizedBox(width: 140, child: Text(widget.label)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.save),
+                        onPressed: () => widget.onSave(_controller.text),
+                      ),
+                    ),
+                    onSubmitted: widget.onSave,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _MultilineField extends StatefulWidget {
+  final String label;
+  final String initialValue;
+  final bool isCompact;
+  final ValueChanged<String> onSave;
+
+  const _MultilineField({
+    required this.label,
+    required this.initialValue,
+    required this.isCompact,
+    required this.onSave,
+  });
+
+  @override
+  State<_MultilineField> createState() => _MultilineFieldState();
+}
+
+class _MultilineFieldState extends State<_MultilineField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: widget.isCompact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.label),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _controller,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () => widget.onSave(_controller.text),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 140, child: Text(widget.label)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.save),
+                        onPressed: () => widget.onSave(_controller.text),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _IntervalRow extends StatefulWidget {
+  final String label;
+  final int minutes;
+  final bool enabled;
+  final bool isCompact;
+  final ValueChanged<bool?> onToggle;
+  final ValueChanged<int> onMinutesChanged;
+
+  const _IntervalRow({
+    required this.label,
+    required this.minutes,
+    required this.enabled,
+    required this.isCompact,
+    required this.onToggle,
+    required this.onMinutesChanged,
+  });
+
+  @override
+  State<_IntervalRow> createState() => _IntervalRowState();
+}
+
+class _IntervalRowState extends State<_IntervalRow> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.minutes.toString());
+  }
+
+  @override
+  void didUpdateWidget(_IntervalRow old) {
+    super.didUpdateWidget(old);
+    if (old.minutes != widget.minutes) {
+      _controller.text = widget.minutes.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: widget.isCompact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Checkbox(value: widget.enabled, onChanged: widget.onToggle),
+                    Expanded(child: Text(widget.label)),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const SizedBox(width: 40),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        controller: _controller,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (value) {
+                          final parsed = int.tryParse(value) ?? widget.minutes;
+                          widget.onMinutesChanged(parsed.clamp(1, 120));
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('minutes'),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Checkbox(value: widget.enabled, onChanged: widget.onToggle),
+                Expanded(child: Text(widget.label)),
+                SizedBox(
+                  width: 80,
+                  child: TextField(
+                    controller: _controller,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (value) {
+                      final parsed = int.tryParse(value) ?? widget.minutes;
+                      widget.onMinutesChanged(parsed.clamp(1, 120));
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('minutes'),
+              ],
+            ),
+    );
+  }
+}

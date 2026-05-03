@@ -10,10 +10,10 @@ class InboxTypeProvider with ChangeNotifier {
 
   String get inboxType => _inboxType;
 
-  void setInboxType(String inboxType) async {
+  Future<void> setInboxType(String inboxType) async {
     _inboxType = inboxType;
-    await HiveStorage.putValue(key: "inboxType", value: inboxType);
     notifyListeners();
+    await HiveStorage.putValue(key: "inboxType", value: inboxType);
   }
 
   void _loadInboxType() {

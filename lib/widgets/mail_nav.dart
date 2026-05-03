@@ -83,170 +83,131 @@ class MailNavState extends State<MailNav> {
         Offset.zero & overlay.size,
       );
       final controller = TextEditingController();
-      final selected = await showMenu<MailFolder>(
-        context: context,
-        position: position,
-        items: [
-          PopupMenuItem<MailFolder>(
-            enabled: false,
-            padding: EdgeInsets.zero,
-            child: StatefulBuilder(
-              builder: (context, setState) {
-                bool isMoveAllowed(MailFolder target) {
-                  final current = mailProvider.selectedFolder;
-                  if (current == null) return true;
-                  final sourceName = current.name.toLowerCase();
-                  final targetName = target.name.toLowerCase();
-                  if (sourceName == 'inbox') {
-                    if (targetName.contains('sent') ||
-                        targetName.contains('draft')) {
-                      return false;
+      MailFolder? selected;
+      try {
+        selected = await showMenu<MailFolder>(
+          context: context,
+          position: position,
+          items: [
+            PopupMenuItem<MailFolder>(
+              enabled: false,
+              padding: EdgeInsets.zero,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  bool isMoveAllowed(MailFolder target) {
+                    final current = mailProvider.selectedFolder;
+                    if (current == null) return true;
+                    final sourceName = current.name.toLowerCase();
+                    final targetName = target.name.toLowerCase();
+                    if (sourceName == 'inbox') {
+                      if (targetName.contains('sent') || targetName.contains('draft')) return false;
                     }
-                  }
-                  if (sourceName.contains('sent') ||
-                      sourceName.contains('draft')) {
-                    if (targetName == 'inbox') {
-                      return false;
+                    if (sourceName.contains('sent') || sourceName.contains('draft')) {
+                      if (targetName == 'inbox') return false;
                     }
+                    return true;
                   }
-                  return true;
-                }
 
-                List<MailFolder> filtered =
-                    mailProvider.folders.where((folder) {
-                      final current = mailProvider.selectedFolder;
-                      if (current == null) return true;
-                      return folder.path != current.path &&
-                          isMoveAllowed(folder);
-                    }).toList();
-                void applyFilter(String value) {
-                  final query = value.trim().toLowerCase();
-                  setState(() {
-                    if (query.isEmpty) {
-                      filtered =
-                          mailProvider.folders.where((folder) {
-                            final current = mailProvider.selectedFolder;
-                            if (current == null) return true;
-                            return folder.path != current.path;
-                          }).toList();
+                  List<MailFolder> filtered = mailProvider.folders.where((folder) {
+                    final current = mailProvider.selectedFolder;
+                    if (current == null) return true;
+                    return folder.path != current.path && isMoveAllowed(folder);
+                  }).toList();
+
+                  void applyFilter(String value) {
+                    final query = value.trim().toLowerCase();
+                    setState(() {
+                      if (query.isEmpty) {
+                        filtered = mailProvider.folders.where((folder) {
+                          final current = mailProvider.selectedFolder;
+                          if (current == null) return true;
+                          return folder.path != current.path;
+                        }).toList();
+                      } else {
+                        filtered = mailProvider.folders
+                            .where((f) => f.name.toLowerCase().contains(query))
+                            .where((folder) {
+                              final current = mailProvider.selectedFolder;
+                              if (current == null) return true;
+                              return folder.path != current.path && isMoveAllowed(folder);
+                            })
+                            .toList();
+                      }
+                    });
+                  }
+
+                  final primary = <MailFolder>[];
+                  final secondary = <MailFolder>[];
+                  for (final folder in filtered) {
+                    final name = folder.name.toLowerCase();
+                    if (name.contains('spam') || name.contains('junk') ||
+                        name.contains('trash') || name.contains('bin') || name.contains('deleted')) {
+                      secondary.add(folder);
                     } else {
-                      filtered =
-                          mailProvider.folders
-                              .where(
-                                (f) => f.name.toLowerCase().contains(query),
-                              )
-                              .where((folder) {
-                                final current = mailProvider.selectedFolder;
-                                if (current == null) return true;
-                                return folder.path != current.path &&
-                                    isMoveAllowed(folder);
-                              })
-                              .toList();
+                      primary.add(folder);
                     }
-                  });
-                }
-
-                final primary = <MailFolder>[];
-                final secondary = <MailFolder>[];
-                for (final folder in filtered) {
-                  final name = folder.name.toLowerCase();
-                  if (name.contains('spam') ||
-                      name.contains('junk') ||
-                      name.contains('trash') ||
-                      name.contains('bin') ||
-                      name.contains('deleted')) {
-                    secondary.add(folder);
-                  } else {
-                    primary.add(folder);
                   }
-                }
 
-                Widget section(List<MailFolder> items) {
-                  return Column(
-                    children:
-                        items
-                            .map(
-                              (folder) => ListTile(
-                                title: Text(folder.name),
-                                dense: true,
-                                visualDensity: VisualDensity.compact,
-                                onTap: () {
-                                  Navigator.of(context).pop(folder);
-                                },
-                              ),
-                            )
-                            .toList(),
-                  );
-                }
+                  Widget section(List<MailFolder> items) {
+                    return Column(
+                      children: items.map((folder) => ListTile(
+                        title: Text(folder.name),
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        onTap: () => Navigator.of(context).pop(folder),
+                      )).toList(),
+                    );
+                  }
 
-                return SizedBox(
-                  width: 280,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Move to:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                  return SizedBox(
+                    width: 280,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Move to:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(hintText: 'Search', prefixIcon: Icon(Icons.search)),
+                            onChanged: applyFilter,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(
-                            hintText: 'Search',
-                            prefixIcon: Icon(Icons.search),
-                          ),
-                          onChanged: applyFilter,
-                        ),
-                        const SizedBox(height: 8),
-                        SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              section(primary),
-                              if (secondary.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                section(primary),
+                                if (secondary.isNotEmpty) ...[const Divider(), section(secondary)],
                                 const Divider(),
-                                section(secondary),
+                                ListTile(
+                                  title: const Text('Create new'),
+                                  onTap: () { Navigator.of(context).pop(); showActionError('Create new not implemented.'); },
+                                ),
+                                ListTile(
+                                  title: const Text('Manage labels'),
+                                  onTap: () { Navigator.of(context).pop(); showActionError('Manage labels not implemented.'); },
+                                ),
                               ],
-                              const Divider(),
-                              ListTile(
-                                title: const Text('Create new'),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  showActionError(
-                                    'Create new not implemented.',
-                                  );
-                                },
-                              ),
-                              ListTile(
-                                title: const Text('Manage labels'),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  showActionError(
-                                    'Manage labels not implemented.',
-                                  );
-                                },
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      );
+          ],
+        );
+      } finally {
+        controller.dispose();
+      }
 
       if (selected != null) {
         await runSelectionAction(
-          () => mailProvider.moveSelectedTo(selected),
+          () => mailProvider.moveSelectedTo(selected!),
           failureMessage: 'Failed to move messages.',
         );
       }
@@ -268,7 +229,9 @@ class MailNavState extends State<MailNav> {
         Offset.zero & overlay.size,
       );
       final controller = TextEditingController();
-      final selected = await showMenu<List<MailFolder>>(
+      List<MailFolder>? selected;
+      try {
+      selected = await showMenu<List<MailFolder>>(
         context: context,
         position: position,
         items: [
@@ -432,6 +395,9 @@ class MailNavState extends State<MailNav> {
           ),
         ],
       );
+      } finally {
+        controller.dispose();
+      }
 
       if (selected != null && selected.isNotEmpty) {
         var okAll = true;
