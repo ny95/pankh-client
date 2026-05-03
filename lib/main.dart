@@ -43,7 +43,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final themeMode = context.select<ThemeProvider, ThemeMode>((p) {
+      if (p.theme == 'light') return ThemeMode.light;
+      if (p.theme == 'dark') return ThemeMode.dark;
+      return ThemeMode.system;
+    });
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -68,12 +72,7 @@ class MyApp extends StatelessWidget {
         dividerColor: const Color(0x772B2C2F),
         colorScheme: const ColorScheme.dark(primary: Colors.deepPurple),
       ),
-      themeMode:
-          themeProvider.theme == 'light'
-              ? ThemeMode.light
-              : themeProvider.theme == 'dark'
-              ? ThemeMode.dark
-              : ThemeMode.system,
+      themeMode: themeMode,
       home: AppLockGate(
         child: Consumer<AuthProvider>(
           builder: (context, auth, _) {

@@ -12,8 +12,9 @@ class CustomDialog {
     return showDialog(
       context: context,
       builder: (context) {
-        final width = MediaQuery.of(context).size.width;
-        final height = MediaQuery.of(context).size.height;
+        final size = MediaQuery.sizeOf(context);
+        final width = size.width;
+        final height = size.height;
         final isSmallScreen = width < 900;
         Widget buildDialog(bool showFullScreenCloseButton) {
           final closeButton = IconButton(

@@ -167,7 +167,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     _syncControllers(account);
     final userName = account.email;
     final connectionSecurity = account.imapSecure ? 'SSL/TLS' : 'None';
-    final isCompact = MediaQuery.of(context).size.width < 600;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final defaultPort = account.imapSecure ? 993 : 143;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -425,7 +425,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
   }
 
   Widget _generalSetting(Account account, AuthProvider auth) {
-    final isSmall = MediaQuery.of(context).size.width < 700;
+    final isSmall = MediaQuery.sizeOf(context).width < 700;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1054,7 +1054,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
   }
 
   Widget _accountWidget() {
-    final isSmallScreen = MediaQuery.of(context).size.width < 900;
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 900;
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         final accounts = auth.accounts;
@@ -1222,7 +1222,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isSmallScreen = MediaQuery.of(context).size.width < 900;
+        final isSmallScreen = MediaQuery.sizeOf(context).width < 900;
         return Column(
                 children: [
                   if(!isSmallScreen)
@@ -1390,7 +1390,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog>
     required VoidCallback onSelect,
   }) {
     final color = Color(int.parse('0xFF$colorHex'));
-    final isCompact = MediaQuery.of(context).size.width < 600;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child:

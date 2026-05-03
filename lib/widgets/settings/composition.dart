@@ -8,6 +8,14 @@ class CompositionSettingsTab extends StatelessWidget {
 
   const CompositionSettingsTab({super.key, required this.isSmallScreen});
 
+  static final List<DropdownMenuItem<String>> _fontItems =
+      ['Arial', 'Times New Roman', 'Courier New', 'Georgia']
+          .map((font) => DropdownMenuItem<String>(
+                value: font,
+                child: Text(font, overflow: TextOverflow.ellipsis),
+              ))
+          .toList();
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -35,18 +43,7 @@ class CompositionSettingsTab extends StatelessWidget {
                   trailing: DropdownButton<String>(
                     value: settings.defaultFont,
                     isExpanded: true,
-                    items:
-                        ['Arial', 'Times New Roman', 'Courier New', 'Georgia']
-                            .map(
-                              (font) => DropdownMenuItem(
-                                value: font,
-                                child: Text(
-                                  font,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
+                    items: _fontItems,
                     onChanged:
                         (val) {
                           if (val == null) return;

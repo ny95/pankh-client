@@ -99,7 +99,7 @@ class AccountListState extends State<AccountList>
     final isActive = widget.activeEmail == email;
     final isSecure = account.imapSecure;
     final theme = Theme.of(context);
-    final isSmallScreen = MediaQuery.of(context).size.width < 900;
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 900;
 
     return Container(
       key: ValueKey(account.email),

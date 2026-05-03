@@ -51,6 +51,10 @@ class LoginScreenState extends State<LoginScreen> {
     'NTLM',
     'TLS Certificate',
   ];
+  static final List<DropdownMenuItem<String>> _authMethodItems =
+      _setupAuthMethodOptions
+          .map((v) => DropdownMenuItem<String>(value: v, child: Text(v)))
+          .toList();
 
   final _identityFormKey = GlobalKey<FormState>();
   final _manualFormKey = GlobalKey<FormState>();
@@ -705,14 +709,7 @@ class LoginScreenState extends State<LoginScreen> {
               border: OutlineInputBorder(),
             ),
             items:
-                _setupAuthMethodOptions
-                    .map(
-                      (value) => DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      ),
-                    )
-                    .toList(),
+                _authMethodItems,
             onChanged: (value) {
               if (value == null) return;
               setState(() => _selectedAuthMethod = value);

@@ -5,14 +5,15 @@ class CustomSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       height: 50,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(50),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).dividerColor,
+            color: theme.dividerColor,
             blurRadius: 0,
             spreadRadius: 1,
             offset: const Offset(0, 0),

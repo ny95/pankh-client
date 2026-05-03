@@ -196,7 +196,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
         final size = renderBox.size;
 
         // Calculate available space below and above
-        final screenHeight = MediaQuery.of(context).size.height;
+        final screenHeight = MediaQuery.sizeOf(context).height;
         final spaceBelow = screenHeight - (offset.dy + size.height);
         final spaceAbove = offset.dy;
 
@@ -390,7 +390,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
             builder: (context, constraints) {
               return ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
                   maxWidth: constraints.maxWidth,
                 ),
                 child: RawScrollbar(
@@ -680,8 +680,8 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
     final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
     final mailProvider = Provider.of<MailProvider>(context, listen: false);
-    var size = MediaQuery.of(context).size;
-    bool isSmallScreen = size.width < 800;
+    final size = MediaQuery.sizeOf(context);
+    final bool isSmallScreen = size.width < 800;
 
     return Column(
       children: [
@@ -1072,8 +1072,9 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
         final currentSize = currentRenderBox.size;
 
         // Get screen dimensions
-        final screenHeight = MediaQuery.of(context).size.height;
-        final screenWidth = MediaQuery.of(context).size.width;
+        final screenSize = MediaQuery.sizeOf(context);
+        final screenHeight = screenSize.height;
+        final screenWidth = screenSize.width;
 
         // Calculate available space
         final spaceBelow =
@@ -1124,6 +1125,7 @@ class _CustomDropdownState<T> extends State<_CustomDropdown<T>> {
                         final item = widget.items[index];
                         final isSelected = item == widget.value;
                         return InkWell(
+                          key: ValueKey(item),
                           onTap: () {
                             widget.onChanged?.call(item);
                             _closeDropdown();
@@ -1275,8 +1277,9 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
         final currentSize = currentRenderBox.size;
 
         // Get screen dimensions
-        final screenHeight = MediaQuery.of(context).size.height;
-        final screenWidth = MediaQuery.of(context).size.width;
+        final screenSize = MediaQuery.sizeOf(context);
+        final screenHeight = screenSize.height;
+        final screenWidth = screenSize.width;
 
         // Calculate available space
         final spaceBelow =
@@ -1458,7 +1461,7 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
         final isInMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
 
         if (!isInMonth) {
-          return Container();
+          return Container(key: ValueKey('empty_$index'));
         }
 
         final date = DateTime(
@@ -1474,6 +1477,7 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
         final isToday = _isSameDay(date, DateTime.now());
 
         return GestureDetector(
+          key: ValueKey(date),
           onTap: () {
             setState(() {
               _selectedDate = date;

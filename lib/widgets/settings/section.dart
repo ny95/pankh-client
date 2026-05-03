@@ -12,7 +12,7 @@ class SettingsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.only(top: 16, bottom: 8),
+          padding: const EdgeInsets.only(top: 16, bottom: 8),
           child: Text(
             title,
             style: Theme.of(
@@ -24,7 +24,7 @@ class SettingsSection extends StatelessWidget {
           color: Colors.transparent,
           shadowColor: Colors.transparent,
           child: Padding(
-            padding: EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             child: Column(children: children),
           ),
         ),
@@ -42,7 +42,7 @@ class SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(
@@ -79,7 +79,7 @@ class SwitchSettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(flex: 2, child: Text(title)),

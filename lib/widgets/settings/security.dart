@@ -164,6 +164,7 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
     final pinController = TextEditingController();
     final confirmController = TextEditingController();
     bool ok = false;
+    try {
     await showDialog<void>(
       context: context,
       builder:
@@ -220,6 +221,10 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
             ],
           ),
     );
+    } finally {
+      pinController.dispose();
+      confirmController.dispose();
+    }
     return ok;
   }
 

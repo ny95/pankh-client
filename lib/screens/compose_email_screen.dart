@@ -336,12 +336,18 @@ class _ComposeEmail extends State<ComposeEmail> {
     await _saveDraftToServer(draft);
   }
 
+  bool _subjectCallbackScheduled = false;
+
   @override
   void didUpdateWidget(covariant ComposeEmail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onSubjectChanged?.call(option['subject']?.toString() ?? '');
-    });
+    if (!_subjectCallbackScheduled) {
+      _subjectCallbackScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _subjectCallbackScheduled = false;
+        widget.onSubjectChanged?.call(option['subject']?.toString() ?? '');
+      });
+    }
   }
 
   Future<void> _deleteDraft() async {
@@ -472,15 +478,14 @@ class _ComposeEmail extends State<ComposeEmail> {
 
   @override
   Widget build(BuildContext context) {
-    var size = MediaQuery.of(context).size;
+    final size = MediaQuery.sizeOf(context);
     height = size.height;
     width = size.width;
     isSmallScreen = width < 800;
-    final authProvider = Provider.of<AuthProvider>(context);
+    username = context.select<AuthProvider, String?>((p) => p.email);
     final settings = context.watch<SettingsProvider>();
     final allowFormatting = settings.composeHtml;
     final fontFamily = settings.defaultFont;
-    username = authProvider.email;
     final showHeader = !widget.embedded;
     final body = Stack(
       children: [
@@ -578,7 +583,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                             ),
                             IconButton(
                               onPressed: () async {
-                                await _sendMail(authProvider);
+                                await _sendMail(context.read<AuthProvider>());
                               },
                               color: Colors.white70,
                               icon: const Icon(Icons.send_rounded),
@@ -905,7 +910,7 @@ class _ComposeEmail extends State<ComposeEmail> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () async {
-                            await _sendMail(authProvider);
+                            await _sendMail(context.read<AuthProvider>());
                           },
                           icon: const Icon(Icons.send_rounded),
                           label: const Text('Send'),
