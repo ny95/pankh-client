@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pankh/providers/settings_provider.dart';
+import 'package:pankh/widgets/settings/transparent_switch_card.dart';
 import 'package:provider/provider.dart';
 
 class NotificationSettingsTab extends StatelessWidget {
@@ -18,45 +19,31 @@ class NotificationSettingsTab extends StatelessWidget {
         const SizedBox(height: 12),
 
         // Enable notifications
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Enable Notifications"),
-            subtitle: const Text("Turn on or off all notifications"),
-            value: settings.notificationsEnabled,
-            onChanged: (val) => settings.update(notificationsEnabled: val),
-          ),
+        TransparentSwitchCard(
+          title: "Enable Notifications",
+          subtitle: "Turn on or off all notifications",
+          value: settings.notificationsEnabled,
+          onChanged: (val) => settings.update(notificationsEnabled: val),
         ),
 
         // Sound
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Sound"),
-            subtitle: const Text("Play a sound for new emails"),
-            value: settings.notificationSound,
-            onChanged:
-                settings.notificationsEnabled
-                    ? (val) => settings.update(notificationSound: val)
-                    : null,
-          ),
+        TransparentSwitchCard(
+          title: "Sound",
+          subtitle: "Play a sound for new emails",
+          value: settings.notificationSound,
+          onChanged: settings.notificationsEnabled
+              ? (val) => settings.update(notificationSound: val)
+              : null,
         ),
 
         // Vibration
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Vibration"),
-            subtitle: const Text("Vibrate when receiving emails"),
-            value: settings.notificationVibrate,
-            onChanged:
-                settings.notificationsEnabled
-                    ? (val) => settings.update(notificationVibrate: val)
-                    : null,
-          ),
+        TransparentSwitchCard(
+          title: "Vibration",
+          subtitle: "Vibrate when receiving emails",
+          value: settings.notificationVibrate,
+          onChanged: settings.notificationsEnabled
+              ? (val) => settings.update(notificationVibrate: val)
+              : null,
         ),
 
         const SizedBox(height: 24),
@@ -67,48 +54,33 @@ class NotificationSettingsTab extends StatelessWidget {
         const SizedBox(height: 12),
 
         // Primary Inbox
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Primary Inbox"),
-            subtitle: const Text("Notify for primary inbox emails"),
-            value: settings.notifyPrimary,
-            onChanged:
-                settings.notificationsEnabled
-                    ? (val) => settings.update(notifyPrimary: val)
-                    : null,
-          ),
+        TransparentSwitchCard(
+          title: "Primary Inbox",
+          subtitle: "Notify for primary inbox emails",
+          value: settings.notifyPrimary,
+          onChanged: settings.notificationsEnabled
+              ? (val) => settings.update(notifyPrimary: val)
+              : null,
         ),
 
         // Promotions
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Promotions"),
-            subtitle: const Text("Notify for promotional emails"),
-            value: settings.notifyPromotions,
-            onChanged:
-                settings.notificationsEnabled
-                    ? (val) => settings.update(notifyPromotions: val)
-                    : null,
-          ),
+        TransparentSwitchCard(
+          title: "Promotions",
+          subtitle: "Notify for promotional emails",
+          value: settings.notifyPromotions,
+          onChanged: settings.notificationsEnabled
+              ? (val) => settings.update(notifyPromotions: val)
+              : null,
         ),
 
         // Social
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: SwitchListTile(
-            title: const Text("Social"),
-            subtitle: const Text("Notify for emails from social media"),
-            value: settings.notifySocial,
-            onChanged:
-                settings.notificationsEnabled
-                    ? (val) => settings.update(notifySocial: val)
-                    : null,
-          ),
+        TransparentSwitchCard(
+          title: "Social",
+          subtitle: "Notify for emails from social media",
+          value: settings.notifySocial,
+          onChanged: settings.notificationsEnabled
+              ? (val) => settings.update(notifySocial: val)
+              : null,
         ),
 
         const SizedBox(height: 24),
@@ -171,33 +143,15 @@ class NotificationSettingsTab extends StatelessWidget {
                       value: enabled,
                       onChanged: (val) => setState(() => enabled = val),
                     ),
-                    ListTile(
-                      title: const Text('Start'),
-                      trailing: Text(start.format(context)),
-                      onTap: () async {
-                        final picked =
-                            await showTimePicker(
-                              context: context,
-                              initialTime: start,
-                            );
-                        if (picked != null) {
-                          setState(() => start = picked);
-                        }
-                      },
+                    _TimePickerTile(
+                      title: 'Start',
+                      time: start,
+                      onPicked: (t) => setState(() => start = t),
                     ),
-                    ListTile(
-                      title: const Text('End'),
-                      trailing: Text(end.format(context)),
-                      onTap: () async {
-                        final picked =
-                            await showTimePicker(
-                              context: context,
-                              initialTime: end,
-                            );
-                        if (picked != null) {
-                          setState(() => end = picked);
-                        }
-                      },
+                    _TimePickerTile(
+                      title: 'End',
+                      time: end,
+                      onPicked: (t) => setState(() => end = t),
                     ),
                   ],
                 );
@@ -227,5 +181,32 @@ class NotificationSettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _notificationWidget(context);
+  }
+}
+
+class _TimePickerTile extends StatelessWidget {
+  final String title;
+  final TimeOfDay time;
+  final ValueChanged<TimeOfDay> onPicked;
+
+  const _TimePickerTile({
+    required this.title,
+    required this.time,
+    required this.onPicked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(title),
+      trailing: Text(time.format(context)),
+      onTap: () async {
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: time,
+        );
+        if (picked != null) onPicked(picked);
+      },
+    );
   }
 }

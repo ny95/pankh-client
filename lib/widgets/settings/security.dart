@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:pankh/providers/settings_provider.dart';
+import 'package:pankh/widgets/settings/transparent_switch_card.dart';
 import 'package:provider/provider.dart';
 
 class SecuritySettingsTab extends StatefulWidget {
@@ -49,20 +50,13 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
 
         // Biometric Switch
         if (_biometricSupported)
-          Card(
-            color: Colors.transparent,
-            shadowColor: Colors.transparent,
-            child: SwitchListTile(
-              title: const Text("Enable Biometric Authentication"),
-              subtitle: const Text(
-                "Use fingerprint or face unlock to access app",
-              ),
-              value: settings.biometricEnabled,
-              onChanged:
-                  settings.appLockEnabled
-                      ? (val) => settings.update(biometricEnabled: val)
-                      : null,
-            ),
+          TransparentSwitchCard(
+            title: "Enable Biometric Authentication",
+            subtitle: "Use fingerprint or face unlock to access app",
+            value: settings.biometricEnabled,
+            onChanged: settings.appLockEnabled
+                ? (val) => settings.update(biometricEnabled: val)
+                : null,
           ),
 
         // App Lock Timeout
@@ -84,18 +78,15 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
             },
           ),
         ),
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
+        TransparentCard(
           child: ListTile(
             leading: const Icon(Icons.timer_outlined),
             title: const Text("App Lock Timeout"),
             subtitle: Text('${settings.lockTimeoutMinutes} minutes'),
             trailing: const Icon(Icons.arrow_forward_ios),
-            onTap:
-                settings.appLockEnabled
-                    ? () => _timeoutDialog(context, settings)
-                    : null,
+            onTap: settings.appLockEnabled
+                ? () => _timeoutDialog(context, settings)
+                : null,
           ),
         ),
 
@@ -107,9 +98,7 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
         const SizedBox(height: 12),
 
         // Change PIN
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
+        TransparentCard(
           child: ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text("Change PIN"),
@@ -120,9 +109,7 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
         ),
 
         // 2FA Setup
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
+        TransparentCard(
           child: ListTile(
             leading: const Icon(Icons.security),
             title: const Text("Setup Two-Factor Authentication"),
@@ -137,9 +124,7 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
         ),
 
         // Encryption Info
-        Card(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
+        TransparentCard(
           child: ListTile(
             leading: const Icon(Icons.verified_user),
             title: const Text("Encryption Details"),

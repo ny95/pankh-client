@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
@@ -7,10 +8,12 @@ import '../services/hive_storage.dart';
 class SettingsProvider with ChangeNotifier {
   static const _settingsKey = 'app_settings';
 
+  // ================= UI SETTINGS =================
   bool composeHtml = true;
   bool autoQuote = false;
   String defaultFont = 'Arial';
 
+  // ================= NOTIFICATIONS =================
   bool notificationsEnabled = true;
   bool notificationSound = true;
   bool notificationVibrate = false;
@@ -21,10 +24,13 @@ class SettingsProvider with ChangeNotifier {
   int quietStartHour = 22;
   int quietEndHour = 7;
 
+  // ================= SECURITY =================
   bool biometricEnabled = false;
   bool appLockEnabled = false;
   int lockTimeoutMinutes = 5;
+
   String? _pinHash;
+  String? _pinSalt;
 
   SettingsProvider() {
     _load();
@@ -32,22 +38,44 @@ class SettingsProvider with ChangeNotifier {
 
   bool get hasPin => _pinHash != null && _pinHash!.isNotEmpty;
 
+  // ================= PIN LOGIC =================
+
   bool verifyPin(String pin) {
     if (!hasPin) return false;
-    return _hashPin(pin) == _pinHash;
+
+    // New salted hash
+    if (_pinSalt != null) {
+      return _hashPin(pin, _pinSalt!) == _pinHash;
+    }
+
+    // 🔁 Backward compatibility (old unsalted pins)
+    final legacyHash = _hashPin(pin, '');
+    if (legacyHash == _pinHash) {
+      // upgrade silently to salted
+      setPin(pin);
+      return true;
+    }
+
+    return false;
   }
 
   Future<void> setPin(String pin) async {
-    _pinHash = _hashPin(pin);
+    final salt = _generateSalt();
+    _pinSalt = salt;
+    _pinHash = _hashPin(pin, salt);
+
     await _persist();
     notifyListeners();
   }
 
   Future<void> clearPin() async {
     _pinHash = null;
+    _pinSalt = null;
     await _persist();
     notifyListeners();
   }
+
+  // ================= UPDATE =================
 
   Future<void> update({
     bool? composeHtml,
@@ -82,9 +110,12 @@ class SettingsProvider with ChangeNotifier {
     this.biometricEnabled = biometricEnabled ?? this.biometricEnabled;
     this.appLockEnabled = appLockEnabled ?? this.appLockEnabled;
     this.lockTimeoutMinutes = lockTimeoutMinutes ?? this.lockTimeoutMinutes;
+
     await _persist();
     notifyListeners();
   }
+
+  // ================= STORAGE =================
 
   Map<String, dynamic> toMap() {
     return {
@@ -104,59 +135,51 @@ class SettingsProvider with ChangeNotifier {
       'appLockEnabled': appLockEnabled,
       'lockTimeoutMinutes': lockTimeoutMinutes,
       'pinHash': _pinHash,
+      'pinSalt': _pinSalt, // ✅ NEW
     };
   }
 
   void _load() {
     final stored = HiveStorage.getValue<Map>(key: _settingsKey);
     if (stored == null) return;
-    composeHtml = stored['composeHtml'] is bool ? stored['composeHtml'] : true;
-    autoQuote = stored['autoQuote'] is bool ? stored['autoQuote'] : false;
-    defaultFont =
-        stored['defaultFont'] is String ? stored['defaultFont'] : 'Arial';
-    notificationsEnabled =
-        stored['notificationsEnabled'] is bool
-            ? stored['notificationsEnabled']
-            : true;
-    notificationSound =
-        stored['notificationSound'] is bool
-            ? stored['notificationSound']
-            : true;
-    notificationVibrate =
-        stored['notificationVibrate'] is bool
-            ? stored['notificationVibrate']
-            : false;
-    notifyPrimary =
-        stored['notifyPrimary'] is bool ? stored['notifyPrimary'] : true;
-    notifyPromotions =
-        stored['notifyPromotions'] is bool ? stored['notifyPromotions'] : false;
-    notifySocial =
-        stored['notifySocial'] is bool ? stored['notifySocial'] : true;
-    quietHoursEnabled =
-        stored['quietHoursEnabled'] is bool
-            ? stored['quietHoursEnabled']
-            : false;
-    quietStartHour =
-        stored['quietStartHour'] is int ? stored['quietStartHour'] : 22;
-    quietEndHour =
-        stored['quietEndHour'] is int ? stored['quietEndHour'] : 7;
-    biometricEnabled =
-        stored['biometricEnabled'] is bool ? stored['biometricEnabled'] : false;
-    appLockEnabled =
-        stored['appLockEnabled'] is bool ? stored['appLockEnabled'] : false;
-    lockTimeoutMinutes =
-        stored['lockTimeoutMinutes'] is int
-            ? stored['lockTimeoutMinutes']
-            : 5;
-    _pinHash = stored['pinHash'] is String ? stored['pinHash'] : null;
+
+    composeHtml = stored['composeHtml'] ?? true;
+    autoQuote = stored['autoQuote'] ?? false;
+    defaultFont = stored['defaultFont'] ?? 'Arial';
+
+    notificationsEnabled = stored['notificationsEnabled'] ?? true;
+    notificationSound = stored['notificationSound'] ?? true;
+    notificationVibrate = stored['notificationVibrate'] ?? false;
+    notifyPrimary = stored['notifyPrimary'] ?? true;
+    notifyPromotions = stored['notifyPromotions'] ?? false;
+    notifySocial = stored['notifySocial'] ?? true;
+
+    quietHoursEnabled = stored['quietHoursEnabled'] ?? false;
+    quietStartHour = stored['quietStartHour'] ?? 22;
+    quietEndHour = stored['quietEndHour'] ?? 7;
+
+    biometricEnabled = stored['biometricEnabled'] ?? false;
+    appLockEnabled = stored['appLockEnabled'] ?? false;
+    lockTimeoutMinutes = stored['lockTimeoutMinutes'] ?? 5;
+
+    _pinHash = stored['pinHash'];
+    _pinSalt = stored['pinSalt']; // ✅ NEW
   }
 
   Future<void> _persist() async {
     await HiveStorage.putValue(key: _settingsKey, value: toMap());
   }
 
-  String _hashPin(String pin) {
-    final bytes = utf8.encode(pin);
+  // ================= SECURITY HELPERS =================
+
+  String _hashPin(String pin, String salt) {
+    final bytes = utf8.encode(pin + salt);
     return sha256.convert(bytes).toString();
+  }
+
+  String _generateSalt() {
+    final rand = Random.secure();
+    final values = List<int>.generate(16, (_) => rand.nextInt(256));
+    return base64UrlEncode(values);
   }
 }

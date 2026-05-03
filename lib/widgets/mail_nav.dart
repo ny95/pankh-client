@@ -72,16 +72,7 @@ class MailNavState extends State<MailNav> {
         showActionError('No folders available for this account.');
         return;
       }
-      final box = buttonContext.findRenderObject() as RenderBox;
-      final overlay =
-          Overlay.of(buttonContext).context.findRenderObject() as RenderBox;
-      final position = RelativeRect.fromRect(
-        Rect.fromPoints(
-          box.localToGlobal(Offset.zero, ancestor: overlay),
-          box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
-        ),
-        Offset.zero & overlay.size,
-      );
+      final position = _menuPositionFrom(buttonContext);
       final controller = TextEditingController();
       MailFolder? selected;
       try {
@@ -94,43 +85,25 @@ class MailNavState extends State<MailNav> {
               padding: EdgeInsets.zero,
               child: StatefulBuilder(
                 builder: (context, setState) {
-                  bool isMoveAllowed(MailFolder target) {
-                    final current = mailProvider.selectedFolder;
-                    if (current == null) return true;
-                    final sourceName = current.name.toLowerCase();
-                    final targetName = target.name.toLowerCase();
-                    if (sourceName == 'inbox') {
-                      if (targetName.contains('sent') || targetName.contains('draft')) return false;
-                    }
-                    if (sourceName.contains('sent') || sourceName.contains('draft')) {
-                      if (targetName == 'inbox') return false;
-                    }
-                    return true;
-                  }
+                  final currentFolder = mailProvider.selectedFolder;
 
-                  List<MailFolder> filtered = mailProvider.folders.where((folder) {
-                    final current = mailProvider.selectedFolder;
-                    if (current == null) return true;
-                    return folder.path != current.path && isMoveAllowed(folder);
-                  }).toList();
+                  List<MailFolder> filtered = mailProvider.folders
+                      .where((f) => f.path != currentFolder?.path &&
+                          _isFolderTransferAllowed(f, currentFolder))
+                      .toList();
 
                   void applyFilter(String value) {
                     final query = value.trim().toLowerCase();
                     setState(() {
                       if (query.isEmpty) {
-                        filtered = mailProvider.folders.where((folder) {
-                          final current = mailProvider.selectedFolder;
-                          if (current == null) return true;
-                          return folder.path != current.path;
-                        }).toList();
+                        filtered = mailProvider.folders
+                            .where((f) => f.path != currentFolder?.path)
+                            .toList();
                       } else {
                         filtered = mailProvider.folders
                             .where((f) => f.name.toLowerCase().contains(query))
-                            .where((folder) {
-                              final current = mailProvider.selectedFolder;
-                              if (current == null) return true;
-                              return folder.path != current.path && isMoveAllowed(folder);
-                            })
+                            .where((f) => f.path != currentFolder?.path &&
+                                _isFolderTransferAllowed(f, currentFolder))
                             .toList();
                       }
                     });
@@ -218,16 +191,7 @@ class MailNavState extends State<MailNav> {
         showActionError('No labels available for this account.');
         return;
       }
-      final box = buttonContext.findRenderObject() as RenderBox;
-      final overlay =
-          Overlay.of(buttonContext).context.findRenderObject() as RenderBox;
-      final position = RelativeRect.fromRect(
-        Rect.fromPoints(
-          box.localToGlobal(Offset.zero, ancestor: overlay),
-          box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
-        ),
-        Offset.zero & overlay.size,
-      );
+      final position = _menuPositionFrom(buttonContext);
       final controller = TextEditingController();
       List<MailFolder>? selected;
       try {
@@ -240,59 +204,28 @@ class MailNavState extends State<MailNav> {
             padding: EdgeInsets.zero,
             child: StatefulBuilder(
               builder: (context, setState) {
-                bool isLabelAllowed(MailFolder target) {
-                  final current = mailProvider.selectedFolder;
-                  if (current == null) return true;
-                  final sourceName = current.name.toLowerCase();
-                  final targetName = target.name.toLowerCase();
-                  if (sourceName == 'inbox') {
-                    if (targetName.contains('sent') ||
-                        targetName.contains('draft')) {
-                      return false;
-                    }
-                  }
-                  if (sourceName.contains('sent') ||
-                      sourceName.contains('draft')) {
-                    if (targetName == 'inbox') {
-                      return false;
-                    }
-                  }
-                  return true;
-                }
+                final currentFolder = mailProvider.selectedFolder;
 
-                List<MailFolder> filtered =
-                    mailProvider.folders.where((folder) {
-                      final current = mailProvider.selectedFolder;
-                      if (current == null) return true;
-                      return folder.path != current.path &&
-                          isLabelAllowed(folder);
-                    }).toList();
+                List<MailFolder> filtered = mailProvider.folders
+                    .where((f) => f.path != currentFolder?.path &&
+                        _isFolderTransferAllowed(f, currentFolder))
+                    .toList();
 
                 final selectedLabels = <String>{};
                 void applyFilter(String value) {
                   final query = value.trim().toLowerCase();
                   setState(() {
                     if (query.isEmpty) {
-                      filtered =
-                          mailProvider.folders.where((folder) {
-                            final current = mailProvider.selectedFolder;
-                            if (current == null) return true;
-                            return folder.path != current.path &&
-                                isLabelAllowed(folder);
-                          }).toList();
+                      filtered = mailProvider.folders
+                          .where((f) => f.path != currentFolder?.path &&
+                              _isFolderTransferAllowed(f, currentFolder))
+                          .toList();
                     } else {
-                      filtered =
-                          mailProvider.folders
-                              .where(
-                                (f) => f.name.toLowerCase().contains(query),
-                              )
-                              .where((folder) {
-                                final current = mailProvider.selectedFolder;
-                                if (current == null) return true;
-                                return folder.path != current.path &&
-                                    isLabelAllowed(folder);
-                              })
-                              .toList();
+                      filtered = mailProvider.folders
+                          .where((f) => f.name.toLowerCase().contains(query))
+                          .where((f) => f.path != currentFolder?.path &&
+                              _isFolderTransferAllowed(f, currentFolder))
+                          .toList();
                     }
                   });
                 }
@@ -852,4 +785,32 @@ class _InboxTab extends StatelessWidget {
       ),
     );
   }
+}
+
+RelativeRect _menuPositionFrom(BuildContext buttonContext) {
+  final box = buttonContext.findRenderObject() as RenderBox;
+  final overlay =
+      Overlay.of(buttonContext).context.findRenderObject() as RenderBox;
+  return RelativeRect.fromRect(
+    Rect.fromPoints(
+      box.localToGlobal(Offset.zero, ancestor: overlay),
+      box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+    ),
+    Offset.zero & overlay.size,
+  );
+}
+
+bool _isFolderTransferAllowed(MailFolder target, MailFolder? current) {
+  if (current == null) return true;
+  final sourceName = current.name.toLowerCase();
+  final targetName = target.name.toLowerCase();
+  if (sourceName == 'inbox') {
+    if (targetName.contains('sent') || targetName.contains('draft')) {
+      return false;
+    }
+  }
+  if (sourceName.contains('sent') || sourceName.contains('draft')) {
+    if (targetName == 'inbox') return false;
+  }
+  return true;
 }

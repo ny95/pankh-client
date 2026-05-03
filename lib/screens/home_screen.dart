@@ -44,7 +44,7 @@ class HomeScreenState extends State<HomeScreen> {
   bool _sizeUpdateScheduled = false;
   bool _draftOpenScheduled = false;
   int _composeSessionId = 0;
-  final List<String> bgImgList = [
+  static const List<String> bgImgList = [
     "thumbnail-theme-system.jpg",
     "thumbnail-theme-light.jpg",
     "thumbnail-theme-dark.jpg",
@@ -187,7 +187,7 @@ class HomeScreenState extends State<HomeScreen> {
             (context) => WebPointerInterceptor(
               child: SafeArea(
                 child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.9,
+                  height: MediaQuery.sizeOf(context).height * 0.9,
                   child: Column(
                     children: [
                       Padding(
@@ -265,7 +265,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<bool> _saveDraftIfNeeded({required bool showSnackOnClose}) async {
     final messenger = ScaffoldMessenger.of(context);
-    final mailProvider = Provider.of<MailProvider>(context, listen: false);
+    final mailProvider = context.read<MailProvider>();
     if (!_composeController.hasDraftContent) return false;
     final saved = await _composeController.saveDraftNow(forceServer: true);
     if (!saved) return false;
