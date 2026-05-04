@@ -97,13 +97,14 @@ class _EmailListItemState extends State<EmailListItem> {
     });
     final isRead = flags.any((f) => f.toLowerCase().contains('seen'));
 
-    final highlightColor = Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
+    final theme = Theme.of(context);
+    final highlightColor = theme.colorScheme.primary.withValues(alpha: 0.10);
     final bgColor = isMultiSelected
         ? highlightColor.withValues(alpha: 0.18)
         : isSelected
         ? highlightColor
         : !isRead
-        ? Theme.of(context).dividerColor.withValues(alpha: 0.12)
+        ? theme.dividerColor.withValues(alpha: 0.12)
         : Colors.transparent;
 
     return Material(
@@ -153,7 +154,7 @@ class _EmailListItemState extends State<EmailListItem> {
               color: bgColor,
               border: !isSmallScreen
                   ? Border(
-                      bottom: BorderSide(color: Theme.of(context).dividerColor),
+                      bottom: BorderSide(color: theme.dividerColor),
                     )
                   : null,
             ),
@@ -165,8 +166,8 @@ class _EmailListItemState extends State<EmailListItem> {
                 if (outer.maxWidth < 80) return const SizedBox(height: 56);
 
                 final baseColor = isRead
-                    ? Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.55)
-                    : Theme.of(context).textTheme.bodyMedium?.color;
+                    ? theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.55)
+                    : theme.textTheme.bodyMedium?.color;
 
                 if (isSmallScreen) {
                   return _SmallLayout(

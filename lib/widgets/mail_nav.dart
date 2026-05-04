@@ -36,10 +36,10 @@ class MailNavState extends State<MailNav> {
 
   @override
   Widget build(BuildContext context) {
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    final mailProvider = Provider.of<MailProvider>(context);
-    bool panePreviewOff = layoutProvider.layout == "pane_preview_off";
-    bool panePreviewRight = layoutProvider.layout == "pane_preview_right";
+    final mailProvider = context.watch<MailProvider>();
+    final layout = context.select<LayoutProvider, String?>((p) => p.layout);
+    bool panePreviewOff = layout == "pane_preview_off";
+    bool panePreviewRight = layout == "pane_preview_right";
     final hasSelection = mailProvider.hasSelection;
     final isInbox =
         mailProvider.selectedFolder?.name.toLowerCase() == 'inbox' &&
@@ -642,7 +642,7 @@ class MailNavState extends State<MailNav> {
                     margin: EdgeInsets.only(right: 8),
                     child: IconButton(
                       onPressed: () {
-                        layoutProvider.setLayout(
+                        context.read<LayoutProvider>().setLayout(
                           panePreviewOff
                               ? "pane_preview_right"
                               : (panePreviewRight
@@ -650,7 +650,7 @@ class MailNavState extends State<MailNav> {
                                   : "pane_preview_off"),
                         );
                       },
-                      icon: toggleIcon(layout: layoutProvider.layout),
+                      icon: toggleIcon(layout: layout ?? ''),
                     ),
                   ),
                 ],

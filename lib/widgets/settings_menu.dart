@@ -486,16 +486,17 @@ class SettingsMenuState extends State<SettingsMenu> {
     // Only subscribe to the two values this widget actually renders
     final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
     final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
-    final layoutProvider = Provider.of<LayoutProvider>(context);
-    final inboxTypeProvider = Provider.of<InboxTypeProvider>(context);
+    final layoutProvider = context.watch<LayoutProvider>();
+    final inboxTypeProvider = context.watch<InboxTypeProvider>();
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
+    final theme = Theme.of(context);
 
 
     return Container(
       width: 300,
       margin: isSmallScreen ? null : const EdgeInsets.fromLTRB(0, 16, 16, 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(
+        color: theme.cardColor.withValues(
           alpha: bgOpacity,
         ),
         borderRadius: BorderRadius.only(topLeft: Radius.circular(15), bottomLeft:Radius.circular(15), topRight: isSmallScreen? Radius.zero : Radius.circular(15), bottomRight: isSmallScreen ? Radius.zero : Radius.circular(15) ),
@@ -520,7 +521,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
-                            color: Theme.of(context).dividerColor,
+                            color: theme.dividerColor,
                           ),
                         ),
                       ),
@@ -655,7 +656,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                                       onTap: () => updateTheme(img),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Theme.of(context).dividerColor,
+                                          color: theme.dividerColor,
                                           blurRadius: 0,
                                           spreadRadius: 1,
                                           offset: const Offset(0, 0),
@@ -705,7 +706,7 @@ class SettingsMenuState extends State<SettingsMenu> {
                       decoration: BoxDecoration(
                         border: Border(
                           top: BorderSide(
-                            color: Theme.of(context).dividerColor,
+                            color: theme.dividerColor,
                           ),
                         ),
                       ),

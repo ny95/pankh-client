@@ -621,14 +621,15 @@ class LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLookupStep(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildBanner(
           context,
           text: 'Looking up configuration for ${_emailController.text.trim()}',
-          color: Theme.of(context).colorScheme.primaryContainer,
-          foreground: Theme.of(context).colorScheme.onPrimaryContainer,
+          color: scheme.primaryContainer,
+          foreground: scheme.onPrimaryContainer,
           icon: Icons.info_outline,
         ),
         const SizedBox(height: 28),
@@ -655,6 +656,7 @@ class LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFoundStep(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final source = _sourceLabel(_lookupResult?.source);
     return Form(
       key: _manualFormKey,
@@ -721,8 +723,8 @@ class LoginScreenState extends State<LoginScreen> {
               context,
               text:
                   'This account supports ${_providerLabel(_hostedAuthProvider)} sign-in. Continue to authenticate with your email host.',
-              color: Theme.of(context).colorScheme.primaryContainer,
-              foreground: Theme.of(context).colorScheme.onPrimaryContainer,
+              color: scheme.primaryContainer,
+              foreground: scheme.onPrimaryContainer,
               icon: Icons.verified_user_outlined,
             )
           else if (_requiresPassword)
@@ -745,8 +747,8 @@ class LoginScreenState extends State<LoginScreen> {
               context,
               text:
                   'Hosted sign-in is available for this account, but your selected authentication method will be used instead.',
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              foreground: Theme.of(context).colorScheme.onSecondaryContainer,
+              color: scheme.secondaryContainer,
+              foreground: scheme.onSecondaryContainer,
               icon: Icons.info_outline,
             )
           else
@@ -754,8 +756,8 @@ class LoginScreenState extends State<LoginScreen> {
               context,
               text:
                   'The selected authentication method does not require a password during setup.',
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              foreground: Theme.of(context).colorScheme.onSecondaryContainer,
+              color: scheme.secondaryContainer,
+              foreground: scheme.onSecondaryContainer,
               icon: Icons.info_outline,
             ),
           const SizedBox(height: 20),
@@ -801,6 +803,7 @@ class LoginScreenState extends State<LoginScreen> {
 
   Widget _buildManualStep(BuildContext context) {
     final failed = _step == _LoginStep.failed;
+    final scheme = Theme.of(context).colorScheme;
 
     return Form(
       key: _manualFormKey,
@@ -818,11 +821,11 @@ class LoginScreenState extends State<LoginScreen> {
             color:
                 failed
                     ? const Color(0xFFFFF1BF)
-                    : Theme.of(context).colorScheme.secondaryContainer,
+                    : scheme.secondaryContainer,
             foreground:
                 failed
                     ? const Color(0xFF6B5600)
-                    : Theme.of(context).colorScheme.onSecondaryContainer,
+                    : scheme.onSecondaryContainer,
             icon: Icons.info_outline,
           ),
           const SizedBox(height: 20),
@@ -1074,26 +1077,27 @@ class LoginScreenState extends State<LoginScreen> {
     required bool active,
     required bool completed,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final background =
         active
             ? scheme.primaryContainer
             : completed
             ? Colors.green.shade100
-            : Theme.of(context).cardColor;
+            : theme.cardColor;
     final foreground =
         active
             ? scheme.onPrimaryContainer
             : completed
             ? Colors.green.shade900
-            : Theme.of(context).textTheme.bodyMedium?.color ?? scheme.onSurface;
+            : theme.textTheme.bodyMedium?.color ?? scheme.onSurface;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Text(
         label,
@@ -1112,20 +1116,21 @@ class LoginScreenState extends State<LoginScreen> {
     required String subtitle,
     required List<Widget> children,
   }) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Text(title, style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodySmall,
+            style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           _buildResponsiveFields(
@@ -1170,17 +1175,16 @@ class LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildInlineInfo(BuildContext context, String text) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
+        color: scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSecondaryContainer,
-        ),
+        style: TextStyle(color: scheme.onSecondaryContainer),
       ),
     );
   }
@@ -1192,17 +1196,18 @@ class LoginScreenState extends State<LoginScreen> {
     required String port,
     required bool secure,
   }) {
+    final theme = Theme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          Text(title, style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(subtitle),
           const SizedBox(height: 16),

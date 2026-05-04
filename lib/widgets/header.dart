@@ -339,15 +339,16 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
     MailProvider mailProvider, {
     required VoidCallback onClose,
   }) {
+    final theme = Theme.of(context);
     final folders = mailProvider.folders;
     final folderNames = {'All Mail', ...folders.map((f) => f.name)}.toList();
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
+        border: Border.all(color: theme.dividerColor, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -370,7 +371,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
+                  color: theme.dividerColor,
                   width: 1,
                 ),
               ),
@@ -487,7 +488,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                       setState(() => sizeOp = value);
                                     }
                                   },
-                                  backgroundColor: Theme.of(context).cardColor,
+                                  backgroundColor: theme.cardColor,
                                   parentOverlayEntry: _overlayEntry,
                                 ),
                               ),
@@ -518,7 +519,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                       setState(() => sizeUnit = value);
                                     }
                                   },
-                                  backgroundColor: Theme.of(context).cardColor,
+                                  backgroundColor: theme.cardColor,
                                   parentOverlayEntry: _overlayEntry,
                                 ),
                               ),
@@ -547,7 +548,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                       }
                                     }
                                   },
-                                  backgroundColor: Theme.of(context).cardColor,
+                                  backgroundColor: theme.cardColor,
                                   parentOverlayEntry: _overlayEntry,
                                 ),
                               ),
@@ -565,8 +566,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                         }
                                       });
                                     },
-                                    backgroundColor:
-                                        Theme.of(context).cardColor,
+                                    backgroundColor: theme.cardColor,
                                     parentOverlayEntry: _overlayEntry,
                                   ),
                                 ),
@@ -584,7 +584,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                                 setState(() => selectedFolder = value);
                               }
                             },
-                            backgroundColor: Theme.of(context).cardColor,
+                            backgroundColor: theme.cardColor,
                             parentOverlayEntry: _overlayEntry,
                           ),
                         ),
@@ -624,7 +624,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
-                  color: Theme.of(context).dividerColor,
+                  color: theme.dividerColor,
                   width: 1,
                 ),
               ),
@@ -679,9 +679,10 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final bgBlur = context.select<ThemeProvider, bool>((p) => p.bgBlur);
     final bgOpacity = context.select<ThemeProvider, double>((p) => p.bgOpacity);
-    final mailProvider = Provider.of<MailProvider>(context, listen: false);
+    final mailProvider = context.read<MailProvider>();
     final size = MediaQuery.sizeOf(context);
     final bool isSmallScreen = size.width < 800;
+    final theme = Theme.of(context);
 
     return Column(
       children: [
@@ -730,7 +731,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                   child: Container(
                     key: _searchBarKey,
                     child: SearchAnchor(
-                      viewBackgroundColor: Theme.of(context).cardColor,
+                      viewBackgroundColor: theme.cardColor,
                       viewOnChanged: (value) {
                         _handleSearchChanged(value, mailProvider);
                       },
@@ -741,14 +742,16 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                         BuildContext context,
                         SearchController controller,
                       ) {
+                        final builderTheme = Theme.of(context);
+                        final cardColor = builderTheme.cardColor;
                         return Container(
                           height: 50,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
+                            color: cardColor,
                             borderRadius: BorderRadius.circular(50),
                             boxShadow: [
                               BoxShadow(
-                                color: Theme.of(context).dividerColor,
+                                color: builderTheme.dividerColor,
                                 blurRadius: 0,
                                 spreadRadius: 1,
                                 offset: const Offset(0, 0),
@@ -760,9 +763,7 @@ class HeaderState extends State<Header> with SingleTickerProviderStateMixin {
                             blur: bgBlur,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Theme.of(context).cardColor.withValues(
-                                  alpha: bgOpacity,
-                                ),
+                                color: cardColor.withValues(alpha: bgOpacity),
                                 borderRadius: BorderRadius.circular(50),
                               ),
                               child: SearchBar(
@@ -1476,6 +1477,7 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
             _selectedDate!.day == date.day;
         final isToday = _isSameDay(date, DateTime.now());
 
+        final primaryColor = Theme.of(context).primaryColor;
         return GestureDetector(
           key: ValueKey(date),
           onTap: () {
@@ -1490,9 +1492,9 @@ class _CustomDateDropdownState extends State<_CustomDateDropdown> {
               shape: BoxShape.circle,
               color:
                   isSelected
-                      ? Theme.of(context).primaryColor
+                      ? primaryColor
                       : isToday
-                      ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
+                      ? primaryColor.withValues(alpha: 0.2)
                       : null,
             ),
             child: Center(
