@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:pankh/widgets/web_pointer_interceptor_stub.dart';
@@ -145,7 +147,7 @@ class AppLockScreen extends StatefulWidget {
 
 class _AppLockScreenState extends State<AppLockScreen> {
   final _controller = TextEditingController();
-
+  final _focusNode = FocusNode();
   String _error = '';
   int _attempts = 0;
   DateTime? _blockedUntil;
@@ -159,8 +161,21 @@ class _AppLockScreenState extends State<AppLockScreen> {
         widget.onBiometric();
       });
     }
-  }
 
+    /// 👇 Auto focus PIN input (desktop only)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final isDesktop = MediaQuery.of(context).size.width >= 600;
+      if (isDesktop) {
+        FocusScope.of(context).requestFocus(_focusNode);
+      }
+    });
+  }
+    @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
   void _submit() {
     final now = DateTime.now();
 
@@ -192,70 +207,287 @@ class _AppLockScreenState extends State<AppLockScreen> {
       _attempts = 0;
     }
   }
+  Widget _buildPinInput(bool isDesktop) {
+    return GestureDetector(
+      onTap: () {
+        if (isDesktop) {
+          FocusScope.of(context).requestFocus(_focusNode);
+        }
+      },
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              /// Hidden input (for desktop typing)
+              if (isDesktop)
+                Opacity(
+                  opacity: 0,
+                  child: SizedBox(
+                    width: 1,
+                    height: 1,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      onChanged: (_) {
+                        setState(() {});
+                        if (_controller.text.length == 6) _submit();
+                      },
+                      decoration: const InputDecoration(counterText: ''),
+                    ),
+                  ),
+                ),
 
+              /// Visible UI
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(6, (i) {
+                  final isActive = i == _controller.text.length;
+                  final isFilled = i < _controller.text.length;
+
+                  return Column(
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        width: isDesktop ? 52 : 44,
+                        height: isDesktop ? 52 : 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.08),
+                          border: Border.all(
+                            color: isActive
+                                ? Colors.blueAccent
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                          boxShadow: isActive
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.blueAccent.withOpacity(0.6),
+                                    blurRadius: 12,
+                                    spreadRadius: 1,
+                                  )
+                                ]
+                              : [],
+                        ),
+                        alignment: Alignment.center,
+                        child: isFilled
+                            ? Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white70,
+                                  shape: BoxShape.circle,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: isFilled || isActive
+                              ? Colors.blueAccent
+                              : Colors.white.withOpacity(0.2),
+                          boxShadow: (isFilled || isActive)
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.blueAccent.withOpacity(0.6),
+                                    blurRadius: 8,
+                                  )
+                                ]
+                              : [],
+                        ),
+                      )
+                    ],
+                  );
+                }),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildKeypad() {
+    Widget key(String text, {VoidCallback? onTap, Widget? child, bool primary = false}) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.all(8),
+          height: 70,
+          width: 100,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: primary
+                ? const LinearGradient(
+                    colors: [Color(0xFF4DA3FF), Color(0xFF0066FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.08),
+                      Colors.black.withOpacity(0.2)
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(4, 6),
+              )
+            ],
+          ),
+          alignment: Alignment.center,
+          child: child ??
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: 25,
+                  color: primary ? Colors.white : Colors.white70,
+                ),
+              ),
+        ),
+      );
+    }
+
+    void add(String d) {
+      if (_controller.text.length >= 6) return;
+
+      setState(() {
+        _controller.text += d;
+        _error = '';
+      });
+
+      if (_controller.text.length == 6) _submit();
+    }
+
+    void back() {
+      if (_controller.text.isEmpty) return;
+
+      setState(() {
+        _controller.text =
+            _controller.text.substring(0, _controller.text.length - 1);
+      });
+    }
+
+    return Column(
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          key('1', onTap: () => add('1')),
+          key('2', onTap: () => add('2')),
+          key('3', onTap: () => add('3')),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          key('4', onTap: () => add('4')),
+          key('5', onTap: () => add('5')),
+          key('6', onTap: () => add('6')),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          key('7', onTap: () => add('7')),
+          key('8', onTap: () => add('8')),
+          key('9', onTap: () => add('9')),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          key('', onTap: back, child: const Icon(Icons.backspace, color: Colors.white70)),
+          key('0', onTap: () => add('0')),
+          key(
+            '',
+            primary: true,
+            onTap: _submit,
+            child: const Icon(Icons.lock_open, color: Colors.white),
+          ),
+        ]),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isDesktop = !isMobile;
+
+    Widget content = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(isMobile ? 0 : 24),
+        color: Colors.white24
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Blur(
+        blur: true,
+        child: Container(
+          width: isMobile ? double.infinity : 500,
+          height: isMobile ? double.infinity : 380,
+
+          padding: const EdgeInsets.fromLTRB(24, 50, 24, 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(isMobile ? 0 : 24),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.08),
+                Colors.white.withOpacity(0.02),
+              ],  
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              /// 🔒 LOCK ICON
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.08),
+                ),
+                child: const Icon(Icons.lock, size: 100, color: Colors.white30,),
+              ),
+
+              const SizedBox(height: 20),
+
+              /// 🔵 PIN DOTS + GLOW LINE
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  _error.isNotEmpty ? _error :'Enter OTP',
+                  style: TextStyle(color: _error.isNotEmpty ? Colors.redAccent : Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.55)),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+              _buildPinInput(isDesktop),
+              const SizedBox(height: 10),
+
+              if (isMobile) const SizedBox(height: 40),
+
+              if (isMobile) _buildKeypad(),
+
+              const SizedBox(height: 12),
+
+              if (widget.allowBiometric)
+                TextButton(
+                  onPressed: widget.onBiometric,
+                  child: const Text('Use Biometrics'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return WebPointerInterceptor(
       child: Material(
-        color: Colors.black54,
-        child: Blur(
-          blur: true,
-          sigmaX: 2.5,
-          sigmaY: 2.5,
-          child: Center(
-            child: Container(
-              width: 320,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'App Locked',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.number,
-                    obscureText: true,
-                    onChanged: (_) {
-                      if (_error.isNotEmpty) {
-                        setState(() => _error = '');
-                      }
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'PIN',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => _submit(),
-                  ),
-                  if (_error.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        _error,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: _submit,
-                    child: const Text('Unlock'),
-                  ),
-                  if (widget.allowBiometric)
-                    TextButton(
-                      onPressed: widget.onBiometric,
-                      child: const Text('Use Biometrics'),
-                    ),
-                ],
-              ),
-            ),
-          ),
+        color: Colors.black.withOpacity(0.6),
+        child: Center(
+          child: isMobile ? content : content,
         ),
       ),
     );

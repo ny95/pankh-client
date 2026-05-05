@@ -79,14 +79,17 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
           ),
         ),
         TransparentCard(
+          isEnabled: settings.appLockEnabled,
           child: ListTile(
             leading: const Icon(Icons.timer_outlined),
             title: const Text("App Lock Timeout"),
             subtitle: Text('${settings.lockTimeoutMinutes} minutes'),
             trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: settings.appLockEnabled
-                ? () => _timeoutDialog(context, settings)
-                : null,
+            onTap: settings.appLockEnabled ? () =>  _timeoutDialog(context, settings) : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Enable App Lock.')),
+              );
+            },
           ),
         ),
 
@@ -99,12 +102,17 @@ class _SecuritySettingsTabState extends State<SecuritySettingsTab> {
 
         // Change PIN
         TransparentCard(
+          isEnabled:settings.appLockEnabled,
           child: ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text("Change PIN"),
             subtitle: const Text("Set or update your 4-digit app PIN"),
             trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () => _setPinDialog(context, settings),
+            onTap: settings.appLockEnabled ? () =>  _setPinDialog(context, settings) : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Enable App Lock.')),
+              );
+            },
           ),
         ),
 
